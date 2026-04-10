@@ -1,0 +1,9 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }\PYG{n}{ccount}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{do}
+\PYG{+w}{        }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{ccount}\PYG{o}{++}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{read}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}\PYG{+w}{ }\PYG{c+c1}{// Read response from LKM}
+\PYG{+w}{            }\PYG{n}{xstatus}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{.}\PYG{n}{rvalue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{((}\PYG{n}{xstatus}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ccount}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{10000000}\PYG{p}{));}
+\end{Verbatim}

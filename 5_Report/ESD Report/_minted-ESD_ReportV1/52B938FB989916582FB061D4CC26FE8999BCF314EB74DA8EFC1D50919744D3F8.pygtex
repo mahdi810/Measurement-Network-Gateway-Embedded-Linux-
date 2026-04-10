@@ -1,0 +1,17 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{adcRX}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{adc2lane}
+\PYG{+w}{    }\PYG{k}{GENERIC}\PYG{+w}{ }\PYG{k}{MAP}\PYG{+w}{ }\PYG{p}{(}\PYG{+w}{ }\PYG{n}{USPI\PYGZus{}SIZE}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{16}\PYG{+w}{ }\PYG{p}{)}
+\PYG{+w}{    }\PYG{k}{PORT}\PYG{+w}{ }\PYG{k}{MAP}\PYG{+w}{ }\PYG{p}{(}
+\PYG{+w}{        }\PYG{n}{resetn}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{S\PYGZus{}AXI\PYGZus{}ARESETN}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{bclk}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{S\PYGZus{}AXI\PYGZus{}ACLK}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{spi\PYGZus{}clkp}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{spiclk\PYGZus{}p}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{start}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{start\PYGZus{}adc}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{done}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{done\PYGZus{}adc}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{scsq}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{uAD1csq}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sclk}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{uAD1Sclk}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sdi\PYGZus{}0}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{usdiAD\PYGZus{}0}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sdi\PYGZus{}1}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{usdiAD\PYGZus{}1}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{rcvData\PYGZus{}0}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{ADC\PYGZus{}Data}\PYG{p}{(}\PYG{l+m+mi}{15}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{),}
+\PYG{+w}{        }\PYG{n}{rcvData\PYGZus{}1}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}\PYG{+w}{ }\PYG{n}{ADC\PYGZus{}Data}\PYG{p}{(}\PYG{l+m+mi}{31}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{l+m+mi}{16}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{);}
+\end{Verbatim}

@@ -1,0 +1,289 @@
+
+
+
+\subsection{Architectural Overview \& Userspace Bridging}
+The module serves as the critical translation layer between the
+high-level multithreaded server logic and the physical hardware of the
+Xilinx ZedBoard. Because Linux strictly separates userspace applications
+from physical hardware memory, this module acts as a secure bridge
+utilizing standard POSIX file operations. By hiding complex
+bit-shifting, SPI polling loops, and timeout safeguards behind simple
+functions like \texttt{TempRead()} and \texttt{GetADC()}, it allows the
+higher-level multithreaded architecture to remain clean, fast, and
+entirely focused on timing and network transmission. The
+\texttt{sensor\_read.c} file is a robust, fault-tolerant module.
+
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+    #include <fcntl.h>
+    #include <unistd.h>
+    #include "measdev.h"
+    #include "sensor_read.h"
+    MeasObj_struct TF_Obj_Snd, TF_Obj_Rcv;
+\end{minted}
+
+
+\begin{itemize}
+    \item \textbf{Communication Struct (\texttt{MeasObj\_struct})}: The
+          application cannot read physical memory addresses directly.
+          Instead, it packs commands into \texttt{TF\_Obj\_Snd} (Transmit)
+          and pushes them into the file descriptor \texttt{fd} pointing to
+          the custom kernel driver (\texttt{/dev/meascdd}). The hardware
+          response is then retrieved via \texttt{TF\_Obj\_Rcv}.
+
+    \item \textbf{Modularity}: By hiding complex bit-shifting and SPI
+          polling loops inside this module, the main sensor thread remains
+          clean, lightweight, and hardware-agnostic.
+\end{itemize}
+
+\subsubsection{Low-Level SPI Protocol Management}
+Interacting with the MAX31865 temperature chip requires precise,
+timing-aware SPI bus transactions. The functions \texttt{MaxRead()} and
+\texttt{MaxWrite()} are engineered to handle the physical delays of
+hardware communication safely using strict polling loops and timeout
+safeguards.
+
+\subsubsection*{The MaxRead Function}
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+unsigned int MaxRead(int fd, unsigned int mreg)
+{
+    unsigned int xdata;
+    int k;
+
+    mreg <<= 8;
+    TF_Obj_Snd.rnum = 1;
+    TF_Obj_Snd.rvalue = mreg;
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+\end{minted}
+
+\subsubsection*{Command Preparation \& Transfer: }
+The target register address is shifted left by 8 bits (\texttt{mreg <<= 8}) and pushed to the driver (\texttt{rnum = 1}).
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+    k = 0;
+    xdata = 0xc0000000;
+    do {
+        TF_Obj_Snd.rnum = REGNUM_ID;
+        TF_Obj_Snd.rvalue = 1;
+        write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+        k++;
+        read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE); // Read response from LKM
+        xdata = TF_Obj_Rcv.rvalue;
+    } while (((xdata & 0x01) == 0) && (k < 1000));
+\end{minted}
+
+\subsubsection*{The Polling State Machine \& Timeout: }
+The code enters a strict \texttt{do-while} loop, querying the driver
+for a status update. It checks whether the hardware is ready by
+inspecting the lowest bit (\texttt{xdata \& 0x01}). The loop is capped
+at \texttt{k < 1000} iterations to prevent system freezes if the
+physical wire is disconnected.
+
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+    if (k >= 1000) {
+        printf(" *** MaxRead timeout.");
+    } else {
+        TF_Obj_Snd.rnum = REGNUM_ID;
+        TF_Obj_Snd.rvalue = 2;
+        write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+        read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE); // Read response from LKM
+        xdata = TF_Obj_Rcv.rvalue;
+        xdata &= 0x0ff;
+    }
+    return xdata;
+}
+\end{minted}
+
+\subsubsection*{Data Extraction: }
+Once ready, it reads the final value and masks it (xdata \&= 0x0ff) to ensure a clean 8-bit payload.
+
+\subsubsection{The MaxWrite Function}
+To signal a write operation over SPI, the highest bit of the register
+address is set to \texttt{1} (\texttt{mreg |= 0x080}).
+
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+void MaxWrite(int fd, unsigned int mreg, unsigned int msend)
+{
+    unsigned int transm_data, xdata;
+    int k;
+
+    mreg |= 0x080;
+    transm_data = (mreg << 8) | (msend & 0x0ff);
+    TF_Obj_Snd.rnum = 1;
+    TF_Obj_Snd.rvalue = transm_data;
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+\end{minted}
+
+\subsubsection*{Payload Construction: }
+The 16-bit payload combines the register address and the data byte:
+\texttt{(mreg << 8) | (msend \& 0x0ff)}. Identical to \texttt{MaxRead()},
+it uses the 1000-iteration polling loop to guarantee the write command
+was physically clocked into the sensor.
+
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+     k = 0;
+    xdata = 0xc0000000;
+    do {
+        TF_Obj_Snd.rnum = REGNUM_ID;
+        TF_Obj_Snd.rvalue = 1;
+        write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+        k++;
+        read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE); // Read response from LKM
+        xdata = TF_Obj_Rcv.rvalue;
+    } while (((xdata & 0x01) == 0) && (k < 1000));
+    
+    if (k >= 1000) {
+        printf(" *** MaxWrite timeout.");
+    }
+}
+\end{minted}
+
+\subsubsection*{MAX31865 Temperature Sensor API}
+This section wraps the complex \texttt{MaxRead()} and \texttt{MaxWrite()}
+logic into three simple lifecycle functions tailored specifically for the
+MAX31865 RTD-to-Digital converter.
+
+\paragraph{Initialization (TempPowerUp): }
+Writes the hex value \texttt{0xC1} to the configuration register. This turns on VBIAS, enables Auto-Conversion mode, and enables the 50Hz hardware noise rejection filter. A calculated \texttt{usleep(75000)} allows the analog circuitry 75ms to settle.
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+int TempPowerUp(int fd)
+{
+    ssize_t ret;
+
+    TF_Obj_Snd.rnum   = 0;
+    TF_Obj_Snd.rvalue = 0x022;
+    ret = write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    if (ret < 0) { perror("Sensor Initialization Failed"); return -1; }
+
+    MaxWrite(fd, 0x00, 0xC1);   // VBIAS=ON, AutoConv=ON, 2-wire, 50Hz
+    usleep(75 * 1000);           // 10ms VBIAS settle + 65ms first conversion
+    printf("MAX31865 powered up in auto-conversion mode\n");
+    return 1;
+}
+\end{minted}
+
+
+
+\paragraph{Data Retrieval (TempRead): }
+Fetches the Most Significant Byte (MSB) and Least Significant Byte (LSB). It evaluates \texttt{if (lsb \& 0x01)} to detect hardware faults (like a broken wire) to prevent broadcasting false data. If valid, the 16-bit integer is reassembled and shifted right by 1 (\texttt{>> 1}) to discard the fault bit, isolating the true 15-bit ADC count.
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+int TempRead(int fd, int *output_raw)
+{
+    unsigned int msb = MaxRead(fd, 0x01);
+    unsigned int lsb = MaxRead(fd, 0x02);
+
+    if (lsb & 0x01) {
+        printf("MAX31865 fault: 0x%02X\n", MaxRead(fd, 0x07));
+        return -1;
+    }
+
+    *output_raw = (int)((((msb & 0xFF) << 8) | (lsb & 0xFF)) >> 1);
+    return 1;
+}
+\end{minted}
+
+
+\paragraph{Safe Termination (TempShutdown): }
+Writes \texttt{0x01} to disable VBIAS and save power during system shutdown.
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+void TempShutdown(int fd)
+{
+    MaxWrite(fd, 0x00, 0x01);
+    printf("MAX31865 powered down\n");
+}
+\end{minted}
+
+\subsubsection{Dual-Channel Analog-to-Digital (ADC) Processing}
+The GetADC function communicates with the ZedBoard's ADC peripherals, handling two separate voltage channels simultaneously.
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+void GetADC(int fd, unsigned int *adc0_out, unsigned int *adc1_out)
+{
+    int  ccount;
+    unsigned int xstatus, adc0, adc1;
+    TF_Obj_Snd.rnum = 4;        // start conversion
+    TF_Obj_Snd.rvalue = 0;
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    ccount = 0;
+    
+    do {
+        ccount++;
+        read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE);        // Read response from LKM
+        xstatus = TF_Obj_Rcv.rvalue;
+    } while ((xstatus == 0) && (ccount < 10000000));
+\end{minted}
+
+\paragraph{Trigger and Wait: }
+Writes a \texttt{0} to \texttt{rnum = 4} to signal the FPGA to sample analog voltages. An extended polling loop (\texttt{ccount < 10000000}) provides the hardware ample time to charge its internal capacitors and complete the conversion.
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+       TF_Obj_Snd.rnum = REGNUM_ID;
+    TF_Obj_Snd.rvalue = 5;      // ADC status register
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE);        // Read response from LKM
+    
+    adc1 = TF_Obj_Rcv.rvalue;
+    adc0 = adc1 & 0x0fff;
+    adc1 >>= 16;
+    *adc0_out = adc0;
+    *adc1_out = adc1;
+}
+\end{minted}
+
+\paragraph{Bitwise Separation: }
+The hardware returns a highly optimized 32-bit package containing both readings.
+\begin{itemize}
+    \item \textbf{ADC0 Extraction:} Applies a bitwise AND mask (\texttt{adc1 \& 0x0fff}) to isolate the lowest 12 bits (values 0--4095).
+    \item \textbf{ADC1 Extraction:} Applies a bitwise right-shift (\texttt{adc1 >>= 16}) to push the upper 12 bits down to the bottom, safely separating the second reading.
+\end{itemize}
+
+\subsubsection{Digital I/O (Switches, Buttons, and LEDs)}
+This section maps the physical user interface of the ZedBoard directly into the software.
+
+\paragraph{Switch Acquisition (ReadSwitch): }
+Queries the main status register. Applying an \texttt{\& 0xff} (Binary: \texttt{1111 1111}) mask to the 32-bit return value instantly zeroes out irrelevant upper bits, isolating the exact ON/OFF states of the 8 physical sliding switches.
+
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+    unsigned int ReadSwitch(int fd)
+{
+    TF_Obj_Snd.rnum = REGNUM_ID;
+    TF_Obj_Snd.rvalue = 0;
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE);
+    
+    return (TF_Obj_Rcv.rvalue) & 0xff;
+}
+\end{minted}
+
+\subsubsection*{Push Button Acquisition (ReadButton): }
+Queries the exact same register but shifts the result right by 8 bits (\texttt{>> 8}). Because there are only 5 push buttons, it applies a strict \texttt{\& 0x1f} (Binary: \texttt{0001 1111}) mask to isolate just those 5 states.
+\begin{minted}[bgcolor=lightgray, tabsize=4, breaklines]{c}
+unsigned int ReadButton(int fd)
+{
+    TF_Obj_Snd.rnum = REGNUM_ID;
+    TF_Obj_Snd.rvalue = 0;
+    write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    read(fd, &TF_Obj_Rcv, MEASOBJ_SIZE);
+
+    return ((TF_Obj_Rcv.rvalue) >> 8) & 0x1f;
+}
+\end{minted}
+
+\subsubsection*{LED Control (LedWrite): }
+Pushes a standard 8-bit hex payload to \texttt{rnum = 0}. The FPGA hardware interprets this payload and instantly illuminates the corresponding sequence of the 8 onboard yellow LEDs, providing real-time visual feedback.
+
+\begin{minted}[bgcolor=lightgray, tabsize=4, breaklines]{c}
+void LedWrite(int fd, uint8_t LED_hex_Value)
+{
+    ssize_t ret;
+    TF_Obj_Snd.rnum   = 0;       // write reg0 (lower 8 bits = uzLED)
+    TF_Obj_Snd.rvalue = (unsigned int)LED_hex_Value;
+    ret = write(fd, &TF_Obj_Snd, MEASOBJ_SIZE);
+    if (ret < 0) perror("LED writing failed");
+}
+\end{minted}
+
+
+
+
+
+
+
+
+\clearpage 

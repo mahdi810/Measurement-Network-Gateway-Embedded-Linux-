@@ -1,0 +1,4 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{sample}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}value}\PYG{+w}{ }\PYG{o}{=}
+\PYG{+w}{    }\PYG{p}{(}\PYG{n}{i}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{adc\PYGZus{}zero\PYGZus{}sid}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{adc\PYGZus{}zero\PYGZus{}cache}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{adc\PYGZus{}one\PYGZus{}cache}\PYG{p}{;}
+\end{Verbatim}

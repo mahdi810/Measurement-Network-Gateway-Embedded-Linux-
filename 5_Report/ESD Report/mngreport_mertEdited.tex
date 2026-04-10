@@ -1,0 +1,2393 @@
+\section{Software Development(Mert Ali Turk)}
+
+\subsection{Introduction to Software Development}
+The application software for the Measurement Network Gateway runs on the Linux operating 
+system. The purpose of the software is to gather sensor values from connected sensors 
+and transmit them via the TCP/IP stack. Since the application runs on Linux, POSIX APIs 
+are used, particularly for networking functionality.
+
+This is one of the key benefits of using Embedded Linux, as it enables rapid prototyping 
+without the need to implement the entire communication stack from scratch. Additionally, 
+the Linux image is created using PetaLinux, a Xilinx tool used to generate customized 
+Linux images for Zynq devices.
+
+Gathering sensor values also requires access to hardware, since a custom IP core 
+is implemented to sample the sensors. In the Linux operating system, hardware access 
+is performed through file operations. Therefore, a Linux Kernel Module (LKM) must be 
+developed so that the device can be recognized by the system and exposed as a device
+file under the /dev directory.
+
+\subsection{Software Architecture and Design}
+
+The Measurement Network Gateway software is designed using a modular architecture to ensure scalability, maintainability, and clear separation of responsibilities. The software runs on an Embedded Linux platform and consists of user-space application components that interact with the operating system and underlying hardware through well-defined interfaces.
+
+At a high level, the software architecture is divided into three main layers: the hardware layer, the kernel space layer, and the user space application layer. Each layer is responsible for a specific set of functionalities, enabling abstraction between hardware access and application logic.
+
+The user-space application is responsible for collecting sensor data, processing the received values, and transmitting the data over the network using the TCP/IP protocol. Networking operations are implemented using POSIX-compliant APIs, which provide a reliable and portable interface for socket-based communication.
+
+The kernel space layer provides controlled access to hardware resources. It acts as an interface between the application layer and the custom hardware IP used for sensor sampling. Details of the kernel module implementation are discussed separately in the implementation section.
+
+This layered approach improves system reliability and simplifies future enhancements, such as adding new sensors and using other linux features.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.3\linewidth]{softarch_mert.png}
+    \caption{Software Architecture of the Measurement Network Gateway}
+    \label{fig:softarch}
+\end{figure}
+
+
+\subsubsection{Application Layer Design}
+The application is responsible for sampling sensor data, storing the sampled data in a 
+ring buffer, and transmitting the buffered data to the GUI for graphical visualization. 
+In parallel, the application processes commands received from the GUI, enabling 
+configuration of sensor sampling frequencies and execution of other gateway-related 
+control commands.
+
+The application is composed of three modules: \texttt{mng\_sensor}, \texttt{mng\_network}, and
+\texttt{mmng\_ringbuf}. These modules are functionally separated to improve software maintainability and support 
+future extensibility.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{applayer.png}
+    \caption{Modules of Application Layer}
+    \label{fig:applayer}
+\end{figure}
+
+Each module is accompanied by a corresponding header file. Additionally, a centralized 
+configuration header file, \texttt{mng\_config.h}, is used to define macros that are 
+shared across the application layer. This design improves code abstraction and 
+maintainability by allowing configuration changes to be applied globally without 
+requiring modifications to the source code. Such an approach is commonly adopted in 
+software architecture design.
+
+Following paragraphs provide a brief overview of the responsibilities of each module. Detailed implementation logic is presented in the implementation section.
+
+
+\paragraph{MNG\_SENSOR}\
+
+The sensor module is responsible for managing all sensor-related operations. Sensor 
+sampling is performed using the Programmable Logic (PL), as in real-world applications 
+the number of sensors can exceed 30–50. In such cases, using the PL for high I/O 
+requirements is a logical design choice, since typical MCUs do not provide a sufficient 
+number of serial communication peripherals, whereas this functionality can be implemented 
+in the PL.
+
+Accordingly, the module writes to specific memory-mapped addresses to initiate sensor 
+sampling and retrieves the sampled data once the operation is complete. In addition, 
+the module updates the timestamp associated with each sensor and accesses sensor 
+registers, as each sensor resides in a different address space and is accessed via the 
+AXI interface.
+
+Additionally, the module maintains information about each sensor instance, such as 
+its ID, register number for access, operational state (active or dormant), sampling 
+period, and the sensor frequency selected by the user.
+
+At this stage, only the \texttt{mng\_sensorHandle\_t} structure is presented to illustrate 
+the data maintained by the sensor module; detailed source code and implementation 
+logic are discussed in the implementation section.
+
+
+\begin{lstlisting}[caption={MNG Sensor handle structure}, label={lst:sensorhandle}]
+typedef struct
+{
+    uint16_t sensorFreq;     /* Desired Frequency (Hz) set by user. */
+    uint16_t samplePeriod;   /* (MNG_BASE_FREQ / sensorFreq)sampling period */
+    uint32_t sensorValue;    /* The last sampled data from sensor. */
+    uint64_t elapsedTime;    /* Elapsed time between samples. */
+    uint8_t  sensorDormant;  /* Sensor active or dormant? */
+    uint32_t sensorID;       /* ID of specific sensor */
+    uint16_t regNum;         /* Specific register number for sensor object. */
+}mng_sensorHandle_t;
+\end{lstlisting}
+
+
+\paragraph{MNG\_RINGBUF}\
+
+Since the application needs to store information about sensors — including their values, 
+timestamps, and IDs — a reliable buffer is required before sending the data to the GUI. 
+The sensor ID is particularly important, as the GUI identifies sensors based on their 
+IDs. A ring buffer is used for this purpose, providing a reliable solution that prevents 
+buffer overflow by overwriting the oldest data when the buffer is full.
+
+\begin{lstlisting}[caption={MNG Ring Buffer handle structure}, label={lst:rbufhandle}]
+typedef struct mng_rbuf
+{
+    struct mng_rbuf  * rbufPtr ;                        /* Pointer to self*/
+    uint32_t           rbufVal[MNG_RBUF_LENGTH];        /* Sensor Value buffer */
+    uint64_t           rbufElpTime[MNG_RBUF_LENGTH];    /* Elapsed time buffer*/
+    uint32_t           rbufSensorID[MNG_RBUF_LENGTH];   /* ID for every entry */   
+    uint16_t volatile  rbufHead; /* Ptr to where next char will be inserted*/
+    uint16_t volatile  rbufTail; /* Ptr to where next char will be extracted*/
+    uint16_t           rbufSize; /* Size of the buffer */
+    uint16_t volatile  rbufEntries;  /* Current number of entries */
+    uint8_t            rbufAlive;    /* Buffer is alive or not info*/
+}mng_rbuf_t;
+\end{lstlisting}
+
+
+
+\paragraph{MNG\_NETWORK}\
+
+The network module establishes a reliable TCP/IP connection with the GUI. It is 
+responsible for sending sensor data packets, receiving commands from the client, and 
+parsing these commands to perform the corresponding operations in the application.
+
+
+\begin{lstlisting}[caption={MNG Network handle structure}, label={lst:networkhandle}]
+typedef struct
+{
+    int serverSocket;
+    int clientSocket;
+    struct sockaddr_in server_address;
+    Clnt_Send_struct cmdHandle;
+}mng_networkHandle_t;
+\end{lstlisting}
+
+Another important data structure in the network module is \texttt{mng\_Payload\_t}, which 
+contains the number of samples collected so far, along with the data for each sampled 
+sensor, including its value, timestamp, and ID. The payload is transmitted directly to the GUI.
+
+\begin{lstlisting}[caption={MNG Payload structure}, label={lst:payloadhandle}]
+typedef struct {
+    uint32_t sampleCount;
+    mng_sensorDataPacked_t sendBuf[MNG_PAYLOAD_SIZE];
+}__attribute__((packed)) mng_Payload_t;
+\end{lstlisting}
+
+
+\subsubsection{Kernel Layer}
+
+This section focuses on the kernel layer of the system, which is implemented using embedded Linux generated with the PetaLinux development framework. PetaLinux simplifies the process of configuring, building, and deploying Linux images for Xilinx platforms through the use of vendor-provided Board Support Packages (BSPs).
+
+A customized Linux image is created and executed on the target Xilinx device, ensuring compatibility between the hardware design and the Linux kernel. This setup enables the development and integration of Loadable Kernel Modules (LKMs), which allow kernel functionality to be extended dynamically.
+
+Since a custom IP core is used to communicate with the sensors, a dedicated kernel module must be developed. In Linux, user-space applications cannot directly access hardware resources; instead, hardware devices are abstracted and exposed through the filesystem. Therefore, the kernel module provides file operations that enable reading from and writing to the device. Additionally, the kernel module must be bound to the appropriate hardware address by defining and associating it with the corresponding device tree entry.
+
+\paragraph{Custom Linux Kernel Module "meascdd"}\
+
+The custom kernel module is first introduced by specifying the device identifier 
+to which it is bound. Listing~\ref{lst:meascdd_of_match} shows the device tree 
+matching table used to associate the kernel module with the corresponding hardware 
+IP core.
+
+\begin{lstlisting}[caption={MNG Payload structure}, label={lst:meascdd_of_match}]
+static struct of_device_id meascdd_of_match[] = {
+	{ .compatible = "xlnx,measdif-1.0", },
+	{ /* end of list */ },
+};
+\end{lstlisting}
+
+To clarify the meaning of the compatible string "xlnx,measdif-1.0", it is logical 
+to present the corresponding device tree entry. This entry defines the custom IP 
+core in the hardware description and enables the Linux kernel to match the device 
+with the appropriate kernel module. The device tree node shown in 
+Listing~\ref{lst:measdif_dts} can be found under the components directory as 
+part of the pl.dtsi file, which is automatically generated to describe the 
+Programmable Logic design.
+
+\begin{lstlisting}[caption={MNG Payload structure}, label={lst:measdif_dts}]
+measdif_0: measdif@43c00000 {
+    clock-names = "s00_axi_aclk";
+    clocks = <&clkc 15>;
+    compatible = "xlnx,measdif-1.0";
+    interrupt-names = "md_irq";
+    interrupt-parent = <&intc>;
+    interrupts = <0 29 4>;
+    reg = <0x43c00000 0x10000>;
+    xlnx,s00-axi-addr-width = <0x5>;
+    xlnx,s00-axi-data-width = <0x20>;
+};
+\end{lstlisting}
+
+
+The complete Loadable Kernel Module (LKM) source code is relatively extensive 
+and is therefore provided in the appendix. In this section, only the read and 
+write operations of the custom kernel module, \texttt{meascdd}, are explained, 
+as they are essential for understanding the interaction between the kernel and 
+the custom IP core.
+
+Before describing the read and write operations, it is necessary to introduce 
+the \texttt{meascdd} header file, as it defines the data structures and macros 
+that are directly used during these operations.
+
+\begin{lstlisting}[language=C,
+caption={Data structure and macro definitions in the meascdd header file},
+label={lst:meascdd_header}]
+typedef struct 
+{
+    unsigned int rnum;
+    unsigned int rvalue;
+} MeasObj_struct;
+
+#define MEASOBJ_SIZE sizeof(MeasObj_struct)
+\end{lstlisting}
+
+The data structure and macro shown in Listing~\ref{lst:meascdd_header} are defined 
+in the \texttt{meascdd} header file. This structure is required due to the use 
+of a custom IP core. When accessing the IP, the register number must be written 
+first in order to specify which register is being addressed, followed by a read 
+or write operation to retrieve or update the corresponding register value.
+
+This abstraction allows the kernel module to package register access information 
+in a structured manner. The purpose of this design becomes clearer in the 
+following text, where the read and write operations of the \texttt{meascdd} 
+kernel module are explained in detail.
+
+The write operation of the \texttt{meascdd} kernel module is implemented in the \texttt{dev\_write} function. This function is responsible for handling data sent from user space to the kernel module and forwarding it to the custom IP core when required.
+
+First, the function verifies that the size of the received buffer matches \texttt{MEASOBJ\_SIZE}. This ensures that the incoming data conforms to the expected format defined by the \texttt{MeasObj\_struct} structure. If the buffer size is valid, the data is copied safely from user space to kernel space using \texttt{copy\_from\_user}.
+
+The function then checks the register number field against the \texttt{REGNUM\_ID} macro. If this condition is met, the operation is interpreted as a preparation for a subsequent read operation, and the register number is stored in the global variable \texttt{Reg\_Num}.
+
+If the operation is not a read preparation, the function performs a direct write to the specified register of the custom IP core. The target register address is calculated using the base address of the IP core and the provided register index, and the value is written using \texttt{iowrite32}. In this way, the kernel module supports both register selection and direct register write operations through a unified interface.
+
+\begin{lstlisting}[language=C,
+caption={Write operation implementation of the meascdd kernel module},
+label={lst:meascdd_write}]
+static ssize_t dev_write(struct file *filep,
+                         const char *buffer,
+                         size_t len,
+                         loff_t *offset)
+{
+    void *reg_addr;
+
+    reg_addr = 0;
+    if (len == MEASOBJ_SIZE) 
+    {
+        copy_from_user(&TF_Obj_Rcv, buffer, len);
+
+        if (TF_Obj_Rcv.rnum == REGNUM_ID) 
+        {
+            Reg_Num = TF_Obj_Rcv.rvalue;
+        } else 
+        {
+            if (TF_Obj_Rcv.rnum == 0) 
+            {
+                Led_Output &= 0x080;
+                Led_Output |= TF_Obj_Rcv.rvalue & 0x07f;
+            }
+            reg_addr = (unsigned int)
+                       (Meas_Base_Address + 4 * TF_Obj_Rcv.rnum);
+            iowrite32(TF_Obj_Rcv.rvalue, reg_addr);
+        }
+    } else 
+    {
+        printk(KERN_INFO
+               "MEAScdd: [write] len: %d (exp.: %d)\n",
+               (int)len, (int)MEASOBJ_SIZE);
+    }
+    return len;
+}
+\end{lstlisting}
+
+The read operation of the \texttt{meascdd} kernel module is straightforward. It 
+retrieves data from the register that was previously selected during the write 
+operation and stored in the global variable \texttt{Reg\_Num}.
+
+When a read request is issued from user space, the \texttt{dev\_read} function 
+assigns the selected register number to the outgoing data structure and reads 
+the corresponding register value from the custom IP core using \texttt{ioread32}. 
+The retrieved register number and value are then copied from kernel space to 
+user space using \texttt{copy\_to\_user}.
+
+If the data transfer is successful, the function returns zero, indicating a 
+successful read operation. Otherwise, an error code is returned to signal a 
+failure in copying data to user space.
+
+\begin{lstlisting}[language=C,
+caption={Read operation implementation of the meascdd kernel module},
+label={lst:meascdd_read}]
+static ssize_t dev_read(struct file *filep,
+                        char *buffer,
+                        size_t len,
+                        loff_t *offset)
+{
+    int error_count = 0;
+
+    TF_Obj_Snd.rnum = Reg_Num;
+    TF_Obj_Snd.rvalue =
+        ioread32(Meas_Base_Address + 4 * Reg_Num);
+
+    error_count =
+        copy_to_user(buffer, &TF_Obj_Snd, MEASOBJ_SIZE);
+
+    if (error_count == 0) 
+    {
+        return 0;
+    } else 
+    {
+        printk(KERN_INFO
+               "MEAScdd: Failed to send %d characters to the user\n",
+               error_count);
+        return -EFAULT;
+    }
+}
+\end{lstlisting}
+
+
+
+
+\subsubsection{Hardware Layer}
+This section describes the lowest layer of the system, namely the hardware layer. 
+The hardware platform used in this project is the ZedBoard development kit, which is
+based on the XC7Z020-CLG484 device. This device integrates a dual-core ARM Cortex-A9 
+processing system with a Programmable Logic (PL) fabric.
+
+In addition to the processing platform, several external sensors are used, including 
+the MAX31865 temperature sensor and the PmodAD1 dual-channel analog-to-digital 
+converter (ADC), which provide the necessary sensor data for the system.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{zedboard.jpeg}
+    \caption{Zedboard}
+    \label{fig:zedboard}
+\end{figure}
+
+
+\subsubsection{Data Flow of Program}
+
+Understanding the data flow of the program is crucial for comprehending its overall 
+operation. The following figure illustrates how data is transferred from the hardware 
+layer to the GUI, as well as how control commands are transmitted from the GUI back to 
+the hardware.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{dataflwww.png}
+    \caption{Dataflow of Programme}
+    \label{fig:dataflow}
+\end{figure}
+
+
+\subsection{Implementation of Software}
+This section presents a detailed explanation of the software implementation. 
+Each software module is discussed in depth, with a focus on the key application 
+programming interfaces (APIs), internal design decisions, and the overall design 
+philosophy of the system.
+
+The software modules are presented in the following order, reflecting their initialization sequence and runtime interaction within the system:
+
+\begin{enumerate}
+    \item Main application module
+    \item Sensor management module (\texttt{mng\_sensor})
+    \item Ring buffer module (\texttt{mng\_ringbuf})
+    \item Network communication module (\texttt{mng\_network})
+\end{enumerate}
+
+
+\subsubsection{Main application module}
+
+The main application consists of two separate threads: a sensor thread and a network 
+thread. The sensor thread is responsible for sampling sensor data and pushing the 
+acquired samples into the ring buffer. The network thread handles the transmission of 
+data packets to the GUI, as well as receiving and parsing commands sent by the GUI.
+This multi-threaded design enables concurrent data acquisition and network communication, 
+improving responsiveness and overall system performance.
+
+In this section, only the core logic of the main application is presented, 
+focusing on the sensor and network threads. Initialization routines and auxiliary code 
+are omitted for clarity and are provided in the appendix.
+
+
+\paragraph{Sensor Thread}\
+
+The purpose of the sensor thread is straightforward. At startup, the thread opens the 
+device file \texttt{/dev/meascdd} in order to access the custom IP core through the 
+kernel module. After successful initialization, the thread enters a continuous execution 
+loop.
+
+The execution of this loop is controlled by the runtime variable \texttt{SHUTDOWN}, 
+which is exclusively managed by the GUI. This mechanism allows the GUI to remotely 
+terminate the application in a controlled manner. Within the loop, sensor data is read 
+from the hardware, and upon successful acquisition, the results are written to the ring 
+buffer for further processing.
+
+Since the ring buffer is accessed concurrently by both the sensor and network threads, 
+a mutex is used to protect shared data and prevent race conditions.
+
+When a shutdown event occurs, the thread exits the loop, closes the \texttt{/dev/meascdd} 
+device file, and terminates gracefully.
+\newpage
+\begin{lstlisting}[language=C,
+caption={Sensor Thread Implementation},
+label={lst:meascdd_read}]
+static void * SensorTask(void *arg)
+{
+    (void *)arg;
+    int fd = open(MNG_MEASCDD_FILE_DESCRIPTOR , O_RDWR);
+	if (fd < 0) {
+		return errno;
+	}
+    
+    while(SHUTDOWN)
+    {
+        pthread_mutex_lock(&rbufMutex);
+        if (mng_sensorReadADC(&adc0, fd) == MNG_SENSOR_OK)
+        {           
+            mng_rbufEnqueue(&ringBuff, &adc0);
+        }
+
+        if (mng_sensorReadADC(&adc1, fd) == MNG_SENSOR_OK)
+        {           
+            mng_rbufEnqueue(&ringBuff, &adc1);
+        }
+
+        if (mng_sensorReadTemp(&Temperature, fd) == MNG_SENSOR_OK)
+        {
+            mng_rbufEnqueue(&ringBuff, &Temperature);
+        }
+
+        if (mng_sensorRead(&SwitchButtons, fd) == MNG_SENSOR_OK)
+        {
+            mng_rbufEnqueue(&ringBuff, &SwitchButtons);
+        }
+        
+        pthread_mutex_unlock(&rbufMutex);
+        usleep(MNG_SENSOR_LOOP_INTERVAL_US);
+    }
+
+    close(fd);
+    pthread_exit(NULL);
+}
+\end{lstlisting}
+
+
+\paragraph{Network Thread}\
+
+The network thread operates as a TCP server and is responsible for handling communication 
+with the GUI client. After initialization, the thread waits for an incoming client 
+connection and then blocks on the receive API until a command is sent by the GUI.
+
+The thread executes within a loop controlled by the runtime variable \texttt{SHUTDOWN}. 
+Upon receiving a command, the network thread parses the command to determine the requested 
+operation. If the command corresponds to a data request, the thread retrieves the number 
+of available entries in the ring buffer and dequeues the buffered sensor samples. Since 
+the ring buffer is shared with the sensor thread, access is protected using a mutex to 
+prevent race conditions.
+
+Each sensor entry consists of a sensor value, a unique sensor ID, and a corresponding 
+timestamp. These fields are copied into a payload structure, which is then transmitted 
+to the GUI. This design ensures synchronized access to shared data and reliable delivery 
+of time-stamped sensor measurements to the client.
+
+\newpage
+\begin{lstlisting}[language=C,
+caption={Network Thread Implementation},
+label={lst:network_thread}]
+static void * NetworkThread(void * arg)
+{
+    (void *)arg;
+    int ret;
+    mng_networkHandle_t net;
+    mng_Payload_t packet;
+    int32_t  popVal;
+    uint32_t popID;
+    uint64_t popTime;
+
+    ret = mng_networkInit(&net);
+    if(ret != MNG_NETWORK_OK)
+    {
+        printf("Error occured in initilization \r\n");
+    }
+
+    ret = mng_networkAccept(&net);
+    if(ret != MNG_NETWORK_OK)
+    {
+        printf("Error occured accepting client! \r\n");
+    }
+
+    while(SHUTDOWN)
+    {
+        memset(&net.cmdHandle, 0, sizeof(net.cmdHandle));
+        memset(&packet, 0, sizeof(packet));
+
+        ret = mng_networkReceive(&net);
+        if(ret == MNG_NETWORK_OK)
+        {
+            pthread_mutex_lock(&rbufMutex);
+
+            /* Parse the received command */
+            mng_networkParseCmd(&net, &ins);
+
+            if(net.cmdHandle.cmd == MNG_CMD_REQ_DATA)
+            {
+                packet.sampleCount = ringBuff.rbufEntries;
+
+                for(int i = 0;
+                    i < packet.sampleCount && i < MNG_PAYLOAD_SIZE;
+                    i++)
+                {
+                    ret = mng_rbufDequeue(&ringBuff,
+                                          &popVal,
+                                          &popID,
+                                          &popTime);
+                    if(ret == MNG_RBUF_OK)
+                    {
+                        packet.sendBuf[i].sensorVal   = popVal;
+                        packet.sendBuf[i].sensorID    = popID;
+                        packet.sendBuf[i].elapsedTime = popTime;
+                    }
+                }
+
+                pthread_mutex_unlock(&rbufMutex);
+
+                ret = mng_networkSend(&net,
+                                      (mng_Payload_t *)&packet,
+                                      sizeof(packet));
+                if(ret != MNG_NETWORK_OK)
+                {
+                    printf("Error occured sending data! \r\n");
+                }
+            }
+            else
+            {
+                pthread_mutex_unlock(&rbufMutex);
+            }
+        }
+    }
+
+    pthread_exit(NULL);
+}
+\end{lstlisting}
+
+
+
+\subsubsection{Sensor Management Module (\texttt{mng\_sensor})}
+The sensor management module (\texttt{mng\_sensor}) is responsible for handling all 
+sensor-related operations within the application. It maintains essential information 
+for each sensor, including its unique ID, hardware address, operational status, latest 
+sampled value, sampling frequency, and timestamp.
+
+Additionally, since the sensors are accessed through a custom IP core, the module manages 
+the associated register information and performs the required read and write operations 
+to specific registers. This abstraction allows the application to interact with sensors 
+in a hardware-independent manner while centralizing sensor control logic within a single 
+module.
+
+Since the system supports multiple sensors implemented through custom IP cores, the 
+low-level read operations may differ between sensor types. However, the overall design 
+philosophy and interaction pattern remain consistent across all sensors.
+
+For this reason, the \texttt{mng\_sensor} module exposes a set of well-defined APIs 
+that abstract sensor management and access operations. Some APIs are generic and 
+applicable to all sensors, while others are sensor-specific due to hardware differences. 
+In this section, the generic APIs are explained in detail, and the sensor-specific 
+functions are briefly introduced as they follow a similar operational pattern, but you can find all APIs related to this module in appendix.
+
+\begin{lstlisting}[language=C,
+caption={Sensor management module APIs},
+label={lst:mng_sensor_api}]
+/**
+ * @brief Initializes the sensor configuration.
+ */
+MNG_SENSOR_STAT mng_sensorInit(mng_sensorHandle_t *me,
+                               uint16_t userFreq,
+                               uint16_t sensorReg,
+                               uint32_t id);
+
+/**
+ * @brief Samples the sensor.
+ */
+MNG_SENSOR_STAT mng_sensorRead(mng_sensorHandle_t *me, int fd);
+
+/**
+ * @brief Reads a register from the custom IP.
+ */
+uint32_t mng_readReg(int fd, uint16_t regNum);
+
+/**
+ * @brief Writes a value to a register of the custom IP.
+ */
+void mng_writeReg(int fd, uint16_t regNum, uint32_t regVal);
+
+/**
+ * @brief Writes data to the sensor.
+ */
+MNG_SENSOR_STAT mng_sensorWrite(mng_sensorHandle_t *me,
+                                int fd,
+                                uint32_t regval);
+
+/**
+ * @brief Reads ADC sensor data.
+ */
+MNG_SENSOR_STAT mng_sensorReadADC(mng_sensorHandle_t *me, int fd);
+
+/**
+ * @brief Reads temperature sensor data.
+ */
+MNG_SENSOR_STAT mng_sensorReadTemp(mng_sensorHandle_t *me, int fd);
+
+/**
+ * @brief Calculates system startup time.
+ */
+uint64_t mng_getStartUpTime(void);
+
+/**
+ * @brief Calculates elapsed time between samples.
+ */
+uint64_t mng_getElapsedTime(void);
+\end{lstlisting}
+
+The internal sensor handle structure was introduced in the architecture and design 
+section. In this section, the focus shifts to the implementation details of the sensor 
+management module, starting with the sensor initialization logic.
+
+\paragraph{mng\_sensorInit\ API}\
+
+The \texttt{mng\_sensorInit} function initializes a sensor handle using user-defined 
+configuration parameters. The first parameter is a pointer to the sensor handle structure, 
+which represents a specific sensor instance. This handle is later used to manage sampling 
+behavior, register access, and runtime state. The remaining parameters specify the 
+user-selected sampling frequency, the sensor register number associated with the 
+custom IP, and a unique sensor ID.
+
+At the beginning of the function, a null pointer check is performed to ensure that 
+the provided sensor handle is valid. This defensive programming approach prevents 
+undefined behavior and improves system robustness.
+
+Next, the function verifies that the user-selected frequency is a valid divisor of the 
+base frequency, which is defined as 1000~Hz. Since the sensor thread executes at a fixed 
+interval of 1~ms, this constraint ensures accurate and deterministic sampling behavior. 
+If the frequency is invalid, the function returns an error status and aborts 
+initialization.
+
+Once the frequency check succeeds, the sampling period is calculated by dividing the 
+base frequency by the selected sensor frequency. This period determines how often the 
+sensor will be sampled within the sensor thread loop, which is controlled using a 
+conditional check based on the calculated period.
+
+The function then initializes the remaining fields of the sensor handle, including the 
+sensor ID, register number, dormant state, elapsed time, and initial sensor value. 
+By default, the sensor is configured as active (non-dormant), allowing read and write 
+operations to be performed immediately after initialization.
+
+Finally, the function returns a success status, indicating that the sensor has been 
+configured correctly and is ready for operation.
+
+\begin{lstlisting}[language=C,
+caption={Sensor Initialization API},
+label={lst:mng_sensorinit_api}]
+MNG_SENSOR_STAT mng_sensorInit (mng_sensorHandle_t * me , uint16_t userFreq 
+                                , uint16_t sensorReg , uint32_t id)
+{
+    if( me == (void *)0 )   /* NULL pointer check*/
+    {
+        return MNG_SENSOR_ERR_NULL_PTR;
+    }
+
+    /* Choosen frequency *MUST* be divided by 10s */
+    if((MNG_BASE_FREQ_HZ % userFreq) != 0 )
+    {
+        me->sensorFreq = 0U;
+        return MNG_SENSOR_ERR_FREQ; 
+    }
+
+    me->sensorFreq     = userFreq;
+    /* Calculate the sample period */
+    me->samplePeriod     = MNG_BASE_FREQ_HZ / me->sensorFreq ;
+    me->sensorID       = id;
+    me->regNum         = sensorReg;
+    me->sensorDormant  = 0U;
+    me->elapsedTime    = 0U;
+    me->sensorValue    = 0U;
+
+    return MNG_SENSOR_OK;
+}
+\end{lstlisting}
+
+
+\paragraph{mng\_sensorRead API}\
+
+The sensor read logic implemented in \texttt{mng\_sensorRead} follows a deterministic 
+and time-driven approach. The function is invoked periodically by the sensor thread, 
+which executes at a fixed interval of 1~ms.
+
+At the beginning of the function, the sensor’s operational state is checked. If the 
+sensor is marked as dormant, the function immediately returns without performing any 
+read operation. This mechanism allows sensors to be dynamically enabled or disabled 
+during runtime.
+
+If the sensor is active, the function decrements the internal \texttt{samplePeriod} 
+counter. When this counter reaches zero, it indicates that the configured sampling 
+interval has elapsed and the sensor should be sampled. In this case, the sensor value 
+is read from the corresponding register using the register access abstraction. After 
+sampling, the \texttt{samplePeriod} counter is reinitialized to its original value to 
+schedule the next read operation.
+
+Additionally, the elapsed time since system startup is recorded at the moment of 
+sampling. This timestamp is later used to associate each sensor measurement with a 
+precise time reference. If the sampling condition is not met, the function returns a 
+wait status, indicating that the sensor is not yet ready to be sampled.
+
+The sampling period is calculated during sensor initialization by dividing the base frequency by the user-selected sampling frequency. The base frequency is defined as 1000~Hz, which corresponds to the execution rate of the sensor thread (1~ms per iteration). This calculation determines how many thread iterations must occur before a sensor is sampled.
+
+\begin{quote}
+Assume that the user selects a sampling frequency of 100~Hz.  
+Since the sensor thread executes every 1~ms, the sensor must be sampled every 10~ms.
+
+\[
+\text{samplePeriod} = \frac{\text{MNG\_BASE\_FREQ\_HZ}}{\text{userFreq}} =
+\frac{1000}{100} = 10
+\]
+
+This means that the sensor read operation is performed once every 10 iterations of the sensor thread loop.
+\end{quote}
+
+
+\begin{lstlisting}[language=C,
+caption={Sensor Read API},
+label={lst:mng_sensorRead_api}]
+MNG_SENSOR_STAT mng_sensorRead(mng_sensorHandle_t * me , int fd)
+{
+    /* Check if sensor is in Wait mode. */
+    if(me->sensorDormant != 0U)
+    {
+        return MNG_SENSOR_DORMANT;
+    }
+
+    me->samplePeriod--;
+    /*  Read sensor if counter is finished. */
+    if(me->samplePeriod == 0U)
+    {
+        me->sensorValue = mng_readReg( fd , me->regNum );
+        /* Set counter for future reading. */
+        me->samplePeriod = MNG_BASE_FREQ_HZ / me->sensorFreq;
+        /* Get elapsed time */
+        me->elapsedTime = mng_getElapsedTime();
+
+        return MNG_SENSOR_OK;
+    }
+
+    return MNG_SENSOR_WAIT;
+}
+\end{lstlisting}
+
+
+\paragraph{mng\_sensorWrite API}\
+
+The \texttt{mng\_sensorWrite} function provides a generic interface for writing 
+configuration or control values to a sensor through the custom kernel module. Similar 
+to the read operation, the function first checks whether the sensor is in a dormant state. 
+If the sensor is inactive, write operations are prevented and the function returns 
+immediately.
+
+For write operations, the same data structure used by the kernel driver is employed. 
+A local instance of the measurement object structure is populated with the target 
+register number and the value to be written. This structure is then passed to the kernel 
+module using the standard \texttt{write()} system call.
+
+By reusing the kernel module’s data format, the application maintains a consistent and 
+simple communication mechanism between user space and kernel space. If the write operation 
+fails, an error status is returned; otherwise, the function reports successful completion.
+
+
+\begin{lstlisting}[language=C,
+caption={Sensor Write API},
+label={lst:mng_sensorWrite_api}]
+MNG_SENSOR_STAT mng_sensorWrite (mng_sensorHandle_t * me , int fd , uint32_t regval)
+{
+    int ret;
+    /* Check if sensor is in Wait mode. */
+    if(me->sensorDormant != 0U)
+    {
+        me->sensorValue = 0U;
+        return MNG_SENSOR_DORMANT;
+    }
+
+    MeasObj_struct TF_Obj_Snd;
+    TF_Obj_Snd.rnum   = me->regNum;
+    TF_Obj_Snd.rvalue = regval;
+
+    ret = write(fd , &TF_Obj_Snd , MEASOBJ_SIZE);
+    if(ret < 0)
+    {
+        return MNG_SENSOR_ERR_FREQ;
+    }
+
+    return MNG_SENSOR_OK;
+}
+\end{lstlisting}
+
+
+\paragraph{mng\_getStartUpTime API}\
+
+At the beginning of the program, the startup time is recorded to serve as a reference 
+for elapsed time calculations during runtime. The \texttt{mng\_getStartUpTime} function 
+retrieves this initial timestamp and stores it in microsecond resolution.
+
+The function calls the \texttt{clock\_gettime()} system API with the 
+\texttt{CLOCK\_MONOTONIC} clock source. This clock is managed by the Linux kernel and is 
+typically backed by hardware timers within the CPU or system-on-chip. The monotonic clock 
+guarantees that the reported time always increases monotonically and is not affected by 
+system time adjustments, making it suitable for precise time measurements.
+
+The returned time consists of seconds and nanoseconds, which are converted into microseconds before being returned. This conversion provides sufficient temporal resolution for sensor timestamping while keeping the arithmetic simple and efficient.
+
+\begin{lstlisting}[language=C,
+caption={Start Up Time API},
+label={lst:mng_getStartup_api}]
+uint64_t mng_getStartUpTime(void)
+{
+    struct timespec startupTime;
+    startupTime.tv_nsec = 0U;
+    startupTime.tv_sec = 0U;
+    /* Get startup time */
+    clock_gettime(CLOCK_MONOTONIC, &startupTime);
+    /* Calculation to get time in microsecond */
+    return ((startupTime.tv_sec * 1000000U) + (startupTime.tv_nsec / 1000U));
+}
+\end{lstlisting}
+
+\paragraph{mng\_getElapsedTime API}\
+
+The \texttt{mng\_getElapsedTime} function calculates the elapsed time since the 
+application startup and returns this value in microseconds. This function follows a 
+structure similar to the startup time API and relies on the same monotonic clock source 
+to ensure consistency and reliability.
+
+During execution, the function retrieves the current time using the \texttt{clock\_gettime()}
+API with the \texttt{CLOCK\_MONOTONIC} clock. The returned timestamp, represented in 
+seconds and nanoseconds, is converted into microseconds for uniformity with the startup 
+time representation.
+
+The elapsed time is then calculated by subtracting the globally stored startup time value from the current timestamp. This approach provides a simple and efficient mechanism for generating precise timestamps for sensor samples, enabling each measurement to be associated with an accurate time reference relative to system startup.
+
+
+\begin{lstlisting}[language=C,
+caption={Elapsed Time API},
+label={lst:mng_getElapsedTime_api}]
+uint64_t mng_getElapsedTime (void)
+{
+    static struct timespec currentTime;
+    uint64_t usCurrentTime;
+    uint64_t elapsedTime;
+
+    /* Get current time */
+    clock_gettime(CLOCK_MONOTONIC, &currentTime);
+
+    /* Calculation to get time in microsecond */
+    usCurrentTime =((currentTime.tv_sec*1000000U)+(currentTime.tv_nsec / 1000U));
+    elapsedTime   = usCurrentTime - usStartupTime;
+
+    return elapsedTime; /* return elapsed time */
+}
+\end{lstlisting}
+
+
+\subsubsection{Ring Buffer Module (\texttt{mng\_ringbuf})}
+
+Sensor measurements must be temporarily stored before being transmitted to the GUI through 
+the network module. To support this requirement, the application employs a ring buffer 
+data structure to store sampled sensor entries in a reliable and memory-efficient manner.
+
+A ring buffer is particularly well suited for this type of application, as it prevents 
+buffer overflow by overwriting the oldest data when the buffer becomes full. This 
+behavior ensures continuous operation even under high sampling rates or temporary 
+communication delays. Each buffer entry contains the sensor value, sensor ID, and 
+corresponding timestamp, allowing the network module to transmit complete and time-stamped 
+sensor data to the client.
+
+The \texttt{mng\_ringbuf} module provides a small set of APIs to manage buffer creation 
+and data flow, including buffer initialization, enqueue, and dequeue operations. These 
+APIs are explained in detail in the following paragraphs.
+
+\paragraph{Ring Buffer Creation API (\texttt{mng\_rbufCreate})}\
+
+The \texttt{mng\_rbufCreate} function is responsible for initializing a ring buffer 
+instance before it is used by the application. During initialization, internal control 
+variables such as the number of stored entries, head index, and tail index are reset to 
+zero. This ensures that the buffer starts in a known and consistent state.
+
+The function also sets an internal status flag indicating that the buffer is active. 
+This flag is used to validate buffer operations during runtime and prevents enqueue or 
+dequeue operations on an uninitialized buffer.
+
+An important design decision in this module is that the ring buffer length is fixed at 
+compile time using the \texttt{MNG\_RBUF\_LENGTH} macro. This choice is motivated by 
+performance and networking constraints. Since sensor data is transmitted over TCP/IP, 
+the payload size is intentionally limited to ensure that each data packet fits within a 
+single Ethernet frame and does not exceed the maximum transmission unit (MTU) of 
+approximately 1500 bytes. In the current implementation, the buffer length is set to 
+104 entries, guaranteeing that a complete payload can be sent without fragmentation.
+
+Finally, the function clears all buffer storage arrays, including sensor values, sensor 
+IDs, and elapsed time fields. Initializing these memory regions to zero prevents 
+residual or invalid data from being transmitted during early operation. Upon successful 
+completion, the function returns a success status, indicating that the ring buffer is 
+ready for use.
+
+\begin{lstlisting}[language=C,
+caption={Ring Buffer Create API},
+label={lst:mng_rbufCreate_api}]
+MNG_RBUF_STAT mng_rbufCreate(mng_rbuf_t * me )
+{
+    if (me == (void *)0 ) /* Check if pointer is NULL */
+    {
+        return MNG_RBUF_ERR_NULL_PTR;
+    }
+
+    me->rbufPtr      = me;           /* Pointer to object*/
+    me->rbufEntries  = 0U;
+    me->rbufHead     = 0U;
+    me->rbufTail     = 0U;
+    me->rbufAlive    = 1U;
+    me->rbufSize     = MNG_RBUF_LENGTH;
+
+    /* Clear Content of adresses, elapsed time and id space. */
+    for(uint16_t i=0 ; i < me->rbufSize ; i++ )
+    {
+        me->rbufVal[i]      = 0U;
+        me->rbufSensorID[i] = 0U;
+        me->rbufElpTime[i]  = 0U;
+    }
+
+    return MNG_RBUF_OK;
+}
+\end{lstlisting}
+
+\paragraph{Ring Buffer Enqueue API (\texttt{mng\_rbufEnqueue})}\
+
+The \texttt{mng\_rbufEnqueue} function inserts a new sensor sample into the ring buffer. 
+This function is typically called by the sensor thread after a successful sensor read 
+operation and acts as the producer interface of the buffer.
+
+At the beginning of the function, defensive checks are performed to ensure that the 
+buffer pointer is valid and that the buffer instance is active. If the buffer has not 
+been properly initialized or has been marked inactive, the function returns an error 
+status to prevent undefined behavior.
+
+Before inserting new data, the function checks whether the buffer is full. If the buffer 
+has reached its maximum capacity, two behaviors are possible depending on the compilation 
+configuration. When the overwrite mode is enabled, the oldest buffer entry is discarded 
+by advancing the tail index, thereby making room for the new data. This approach 
+ensures continuous operation without blocking the producer. If overwrite mode is 
+disabled, the function reports a buffer-full error and rejects the new entry.
+
+Once space is available, the sensor’s value, unique sensor ID, and elapsed timestamp 
+are written to the current head position of the buffer. After storing the data, the 
+head index is advanced using modular arithmetic to maintain the circular structure of 
+the ring buffer. Finally, the number of stored entries is incremented, and the function 
+returns a success status.
+
+\begin{lstlisting}[language=C,
+caption={Ring Buffer Enqueue API},
+label={lst:mng_rbufEnqueue_api}]
+MNG_RBUF_STAT mng_rbufEnqueue (mng_rbuf_t * me , mng_sensorHandle_t * sensor)
+{
+    if (me == (void *)0 ) /* Check if pointer is NULL */
+    {
+        return MNG_RBUF_ERR_NULL_PTR;
+    }
+
+    if(me->rbufAlive == 0U) /* is Alive? */
+    {
+        return MNG_RBUF_ERR_DEAD;
+    }
+
+    if (me->rbufEntries == me->rbufSize)
+    {
+#ifdef MNG_RBUF_OVERWRITE
+    /* Overwrite: remove oldest item */
+    me->rbufTail = (me->rbufTail + 1U) % me->rbufSize;
+    me->rbufEntries--;
+#else
+    return MNG_RBUF_ERR_FULL;
+#endif
+    }
+
+    /* Write sensor value to buffer. */
+    me->rbufVal[me->rbufHead] = sensor->sensorValue; 
+    /* Give ID number for specific sensor value. */
+    me->rbufSensorID[me->rbufHead] = sensor->sensorID;
+    /* Write elapsed time to buffer */
+    me->rbufElpTime[me->rbufHead] = sensor->elapsedTime;           
+    
+    me->rbufHead =  ( me->rbufHead + 1U ) % me->rbufSize; /* Determine next inserted buf area*/
+    me->rbufEntries++;                                    /* Increase entries by one */
+    return MNG_RBUF_OK;
+}
+\end{lstlisting}
+
+\paragraph{Ring Buffer Dequeue API (\texttt{mng\_rbufDequeue})}\
+
+The \texttt{mng\_rbufDequeue} function removes and returns the oldest sensor entry 
+stored in the ring buffer. This function represents the consumer interface of the 
+buffer and is typically used by the network thread when preparing sensor data packets 
+for transmission to the GUI.
+
+The first parameter is a pointer to the ring buffer instance. The remaining parameters 
+are output pointers used to return the dequeued sensor value, sensor ID, and elapsed 
+timestamp to the caller. By using output parameters, the function avoids unnecessary 
+data copying and allows the caller to directly retrieve individual fields of a sensor 
+entry.
+
+At the beginning of the function, validity checks are performed to ensure that the 
+buffer pointer is not null and that the buffer instance is active. If the buffer has 
+not been initialized or has been marked inactive, an error status is returned.
+
+The function then checks whether the buffer contains any entries. If the buffer is 
+empty, a specific empty-buffer error is returned to indicate that no data is available 
+for extraction.
+
+When valid data is present, the function retrieves the sensor value, sensor ID, and 
+elapsed time from the current tail position of the buffer and stores them in the 
+corresponding output parameters. After the data is extracted, the tail index is advanced 
+using modular arithmetic to preserve the circular structure of the ring buffer, and 
+the entry count is decremented. Finally, the function returns a success status.
+
+\begin{lstlisting}[language=C,
+caption={Ring Buffer Dequeue API},
+label={lst:mng_rbufDequeue_api}]
+MNG_RBUF_STAT mng_rbufDequeue (mng_rbuf_t * me , uint32_t * sensor_val ,
+                                 uint32_t * id , uint64_t * elapsedTime)
+{
+    if (me == (void *)0 ) /* Check if pointer is NULL */
+    {
+        return MNG_RBUF_ERR_NULL_PTR;
+    }
+
+    if(me->rbufAlive == 0U)/* is Alive? */
+    {
+        return MNG_RBUF_ERR_DEAD; // add error macros here
+    }
+
+    /* Check if there is any entry to buffer ? */
+    if(me->rbufEntries == 0U)
+    {
+        return MNG_RBUF_ERR_EMPTY;
+    }
+    
+    /* De-reference sensor value from buffer. */
+    *sensor_val = me->rbufVal[me->rbufTail];
+    /* De-reference sensor ID from buffer. */
+    *id = me->rbufSensorID[me->rbufTail];
+    /* De-reference elapsed time from buffer. */
+    *elapsedTime = me->rbufElpTime[me->rbufTail];
+    /* Determine next extracted buf area*/
+    me->rbufTail=  ( me->rbufTail + 1U ) % me->rbufSize; 
+    me->rbufEntries--;             /* Decrease entries by one */
+    
+    return MNG_RBUF_OK;
+}
+\end{lstlisting}
+
+
+\subsubsection{Network Communication Module (\texttt{mng\_network})}
+
+The network module (\texttt{mng\_network}) is responsible for establishing and managing 
+communication between the embedded system and the graphical user interface (GUI). 
+It provides a reliable TCP/IP-based interface for transmitting sensor data and 
+receiving control commands from the client.
+
+Within the application architecture, the network module operates as a TCP server. It 
+listens for incoming connections from the GUI, accepts client requests, and processes 
+commands in a blocking manner. Based on the received commands, the module either 
+transmits buffered sensor data or modifies the runtime behavior of the system, such as 
+sampling configuration or shutdown control.
+
+To maintain modularity and separation of concerns, all socket creation, connection 
+handling, data transmission, and command parsing logic are encapsulated within this 
+module. This abstraction allows the main application and other modules to interact with 
+the network layer through a small and well-defined set of APIs, without direct 
+dependency on low-level networking details.
+
+In the following subsections, the core APIs provided by the \texttt{mng\_network} module 
+are described, focusing on connection establishment, data exchange, and command 
+handling mechanisms.
+
+
+\paragraph{Network Initialization API (\texttt{mng\_networkInit})}\
+
+The \texttt{mng\_networkInit} function initializes the network module and prepares the 
+application to operate as a TCP server. The function begins by validating the provided 
+network handle pointer to ensure that it is not null.
+
+During initialization, both the server and client socket descriptors are set to an 
+invalid state, indicating that no active connections exist. The function then creates 
+a TCP socket using the IPv4 address family and stream-based communication. If socket 
+creation fails, an appropriate error status is returned.
+
+After successfully creating the socket, the server address structure is configured. 
+The server is bound to all available network interfaces using \texttt{INADDR\_ANY}, and 
+a predefined port number is assigned. This configuration allows the GUI client to connect 
+to the embedded system regardless of the specific network interface used.
+
+The socket is then bound to the configured address and placed into a listening state. 
+By calling the listen operation, the server becomes ready to accept incoming connection 
+requests from the GUI. Any failure during the binding or listening stages results in an 
+error return value.
+
+Upon successful completion, the function returns a success status, indicating that the 
+network module is initialized and ready to accept client connections.
+
+
+\begin{lstlisting}[language=C,
+caption={Network Initialization API},
+label={lst:mng_networkInit_api}]
+MNG_NETWORK_STAT mng_networkInit (mng_networkHandle_t * me )
+{
+    int ret;
+
+    if(me == (void *)0)
+    {
+        return  MNG_NETWORK_ERR_NULL_PTR;
+    }
+
+    /* Initialize server and client to disconnected */
+    me->serverSocket = -1 ;
+    me->clientSocket = -1 ;
+
+    /* Create socket file descriptor. */
+    me->serverSocket = socket(AF_INET , SOCK_STREAM , 0);
+    if(me->serverSocket < 0)
+    {
+        return MNG_NETWORK_ERR_SOCKET;
+    }
+    
+    /* Configuring server address structure. */
+    me->server_address.sin_family = AF_INET;
+    me->server_address.sin_addr.s_addr = INADDR_ANY;
+    me->server_address.sin_port = htons(MNG_NETWORK_PORT);
+
+    /* Bind the socket. */
+    ret = bind(me->serverSocket , (struct sockaddr *)&me->server_address , 
+                                                    sizeof(me->server_address));
+    if(ret < 0 )
+    {
+        return MNG_NETWORK_ERR_BIND;
+    }
+
+    /* Listen for connection from GUI (client) */
+    ret = listen(me->serverSocket , 2);
+    if(ret < 0 )
+    {
+        return MNG_NETWORK_ERR_LISTEN;
+    }
+
+    return     MNG_NETWORK_OK;
+}
+\end{lstlisting}
+
+\newpage
+\paragraph{Network Accept API (\texttt{mng\_networkAccept})}\
+
+The \texttt{mng\_networkAccept} function is responsible for accepting an incoming 
+connection request from the GUI client. This function is called after the network 
+module has been successfully initialized and the server socket has been placed into a 
+listening state.
+
+At the beginning of the function, a null pointer check is performed to ensure the 
+validity of the network handle. The function then invokes the \texttt{accept()} system 
+call on the server socket. This call is blocking, meaning that the function execution 
+is suspended until a client establishes a connection. This behavior is intentional 
+and ensures that the application does not proceed with data exchange before a valid 
+client connection is available.
+
+Upon a successful connection, a new socket descriptor is created for the client and 
+stored in the network handle. This client socket is subsequently used for all data 
+transmission and reception operations between the embedded system and the GUI. If the 
+accept operation fails, the function returns an error status.
+
+Once a client connection has been accepted, the function returns a success status, 
+indicating that the system is ready for bidirectional communication.
+
+\begin{lstlisting}[language=C,
+caption={Network Accept API},
+label={lst:mng_networkAccept_api}]
+MNG_NETWORK_STAT mng_networkAccept (mng_networkHandle_t * me )
+{
+    if(me == (void *)0)
+    {
+        return MNG_NETWORK_ERR_NULL_PTR;
+    }
+
+    /* Accepting the client */
+    /*******                !IT BLOCKS HERE!     **********/
+    me->clientSocket = accept(me->serverSocket , NULL ,NULL);
+    if( me->clientSocket < 0 )
+    {
+        return MNG_NETWORK_ERR_ACCEPT;
+    }
+    
+    return MNG_NETWORK_OK;
+}
+\end{lstlisting}
+
+
+\paragraph{Network Receive API (\texttt{mng\_networkReceive})}\
+
+The \texttt{mng\_networkReceive} function is responsible for receiving commands sent by 
+the GUI client. This function operates on the client socket established during the 
+connection acceptance phase and is typically called within the network thread’s main 
+loop.
+
+The function begins by validating the network handle pointer. It then invokes the 
+\texttt{recv()} system call to read incoming data from the client socket into the 
+command handling structure. This call is blocking and waits until data is available, 
+the connection is closed, or an error occurs.
+
+If the receive operation returns a negative value, an error status is reported, 
+indicating a communication failure. If the return value is zero, it signifies that the 
+remote client has closed the connection. In this case, the client socket is closed, and 
+a specific status code is returned to notify the application of the disconnection.
+
+When valid data is successfully received, the function returns a success status. The 
+received command is stored in the internal command handle structure and is later 
+processed by the command parsing API to determine the appropriate action.
+
+\newpage
+\begin{lstlisting}[language=C,
+caption={Network Receive API},
+label={lst:mng_networkReceive_api}]
+MNG_NETWORK_STAT mng_networkReceive (mng_networkHandle_t * me )
+{
+    ssize_t len;
+    if(me == (void *)0)
+    {
+        return MNG_NETWORK_ERR_NULL_PTR;
+    }
+
+    len = recv(me->clientSocket , &me->cmdHandle , sizeof(Clnt_Send_struct) , 0);
+    if(len < 0 )
+    {
+        return MNG_NETWORK_ERR_RECV;
+
+    }
+    else if(len == 0)  /* Connection closed by remote client*/
+    {
+        mng_networkCloseClient(me); 
+        return MNG_NETWORK_CLIENT_CLOSED;
+    }
+    else if(len > 0)
+    {
+        return MNG_NETWORK_OK;
+    }
+}
+\end{lstlisting}
+
+
+\paragraph{Network Send  API (\texttt{mng\_networkSend})}\
+
+The \texttt{mng\_networkSend} function is responsible for transmitting data from the 
+embedded system to the GUI client over the established TCP connection. This function is 
+primarily used to send sensor data payloads prepared by the network thread after 
+processing client requests.
+
+The function begins by validating the network handle pointer to ensure that the network 
+module has been properly initialized. It then uses the \texttt{send()} system call to 
+transmit the provided data buffer over the client socket. The length parameter specifies 
+the exact number of bytes to be sent, allowing structured data such as sensor payloads 
+to be transmitted in a single operation.
+
+If the send operation fails, an appropriate error status is returned to notify the 
+application of the transmission failure. Otherwise, the function returns a success 
+status, indicating that the data has been successfully delivered to the client.
+
+\begin{lstlisting}[language=C,
+caption={Network Send API},
+label={lst:mng_networkSend_api}]
+MNG_NETWORK_STAT mng_networkSend (mng_networkHandle_t * me , const void * data , size_t len)
+{
+    int ret;
+    if(me == (void *)0)
+    {
+        return MNG_NETWORK_ERR_NULL_PTR;
+    }
+
+    ret = send(me->clientSocket , data , len , 0);
+    if(ret < 0 )
+    {
+        return MNG_NETWORK_ERR_SEND;
+    }
+
+    return MNG_NETWORK_OK;
+}
+\end{lstlisting}
+
+
+\paragraph{Network Parse Command API (\texttt{mng\_networkParseCmd})}\
+
+Commands sent by the GUI client are encapsulated in a structured data format defined by 
+the \texttt{Clnt\_Send\_struct} type. This structure is used both on the embedded system 
+and the GUI side to ensure that the command format is identical and consistent across 
+both platforms.
+
+The structure contains two primary components:
+
+\begin{enumerate}
+    \item \textbf{cmd:} An unsigned integer that specifies the type of command being sent. This field informs the embedded system which action to perform, such as requesting sensor data, changing sensor frequency, or initiating shutdown.
+    
+    \item \textbf{param:} An array of unsigned integers of size \texttt{MNG\_CMD\_MAX\_PARAMS}. Each element provides additional information related to the command. 
+    \begin{itemize}
+        \item For example, in a sensor frequency change command, \texttt{param[0]} may indicate the sensor ID to update, and \texttt{param[1]} specifies the new sampling frequency. 
+        \item Additional indices can be used for other command-specific parameters.
+    \end{itemize}
+\end{enumerate}
+
+The structure is declared with the \texttt{\_\_attribute\_\_((packed))} attribute to 
+prevent compiler-inserted padding. This ensures that the memory layout is deterministic 
+and compatible across the embedded system and GUI, which is critical for reliable network 
+transmission.
+
+\begin{lstlisting}[language=C,
+caption={Send Command Structure},
+label={lst:Clnt_Send_struct}]
+typedef struct {
+    unsigned int cmd;                   
+    unsigned int param[MNG_CMD_MAX_PARAMS];     
+} __attribute__((packed)) Clnt_Send_struct;
+\end{lstlisting}
+
+
+The \texttt{mng\_networkParseCmd} function is responsible for interpreting and acting on commands received from the GUI. This API is invoked immediately after a command is received by the network task, ensuring that every incoming message is parsed and handled consistently before further processing.
+
+The command parser is designed to be easily extensible; new commands can be added by introducing new command identifiers and corresponding case blocks. In the current implementation, the system supports several different command types, each serving a specific purpose in controlling the application and the sensors.
+
+One possible command is a data request command. In this case, the parser does not perform any action and simply returns. The actual data handling logic is implemented in the network task itself, which prepares the payload and sends it back to the GUI.
+
+Several commands are used to control sensor activity by placing individual sensors into dormant mode. Depending on the received command, the corresponding sensor instance (ADC0, ADC1, temperature sensor, or switch/button sensor) is marked as dormant. When a sensor is in dormant mode, it is excluded from sampling and write operations, effectively disabling it without removing it from the system.
+
+The parser also supports write operations to the hardware, such as writing values to the LED register. In this case, the parser opens the custom kernel module device file and writes the requested value to the appropriate register using the low-level register access API. This allows the GUI to directly control hardware outputs.
+
+Another important command handled by the parser is the shutdown command. When this command is received, a global runtime variable is updated, which causes all application threads to exit their main loops gracefully. This mechanism allows the GUI to remotely terminate the application in a controlled manner.
+
+Finally, the parser supports dynamic sensor frequency configuration. When a frequency update command is received, the parser identifies the target sensor using the first parameter and updates the sensor’s sampling frequency using the second parameter. At the same time, the sensor is taken out of dormant mode to ensure that sampling resumes immediately with the new configuration.
+
+Overall, \texttt{mng\_networkParseCmd} function acts as a central decision point between the GUI and the application logic, translating high-level GUI commands into concrete actions such as sensor control, frequency configuration, hardware register access, and application shutdown.
+
+
+\begin{lstlisting}[language=C,
+caption={Network Parser API},
+label={lst:payloads}]
+void mng_networkParseCmd (mng_networkHandle_t * me , mng_sensorInstances_t * s)
+{
+    switch (me->cmdHandle.cmd)
+    {
+        case MNG_CMD_REQ_DATA:            
+            break;
+
+        case MNG_CMD_DORMANT_ADC0:
+            /* code */
+            s->adc0Instance->sensorDormant = 1U;
+            break;
+        
+        case MNG_CMD_DORMANT_ADC1:
+            /* code */
+            s->adc1Instance->sensorDormant = 1U;
+            break;
+
+        case MNG_CMD_DORMANT_TEM:
+            /* code */
+            s->tempInstance->sensorDormant = 1U;
+            break;
+
+        case MNG_CMD_DORMANT_SWBUTT:
+            /* code */
+            s->SwitchButtonsInstance->sensorDormant = 1U;
+            break;
+
+        case MNG_CMD_WLED:
+            /* code */
+            // Write to leds
+            int fd = open(MNG_MEASCDD_FILE_DESCRIPTOR , O_RDWR);
+            mng_writeReg(fd , MNG_IP_LEDS_REGNUM , me->cmdHandle.param[0]);
+            break;
+
+        case MNG_CMD_SHUTDOWN:
+            /* code */
+            SHUTDOWN = 0;
+            break;
+
+        case MNG_CMD_SET_FREQ:
+            /* code */
+            if ( me->cmdHandle.param[0] == MNG_CMD_SET_FREQ_ADC0)
+            {
+                s->adc0Instance->sensorDormant = 0U;   
+                s->adc0Instance->sensorFreq = me->cmdHandle.param[1];
+            }
+            else if(me->cmdHandle.param[0] == MNG_CMD_SET_FREQ_ADC1)
+            {
+                s->adc1Instance->sensorDormant = 0U;
+                s->adc1Instance->sensorFreq = me->cmdHandle.param[1];
+                printf(" TEMP FREQ HAS CHANGED\n");
+            }
+            else if(me->cmdHandle.param[0] == MNG_CMD_SET_FREQ_TMP)
+            {
+                s->tempInstance->sensorDormant = 0U;
+                s->tempInstance->sensorFreq = me->cmdHandle.param[1];
+            }
+            else if(me->cmdHandle.param[0] == MNG_CMD_SET_FREQ_SWBT)
+            {
+                s->SwitchButtonsInstance->sensorDormant = 0U;
+                s->SwitchButtonsInstance->sensorFreq = me->cmdHandle.param[1];
+            }
+
+            break;
+
+        default:
+            break;
+    }
+} 
+\end{lstlisting}
+
+
+\paragraph{Network Payload Structure}\
+
+Lastly, this section presents the data payload that is transmitted from the embedded 
+system to the GUI application. The payload structure, named \texttt{mng\_Payload\_t}, 
+is designed to efficiently encapsulate sampled sensor data and transmit it over the 
+TCP/IP connection.
+
+The payload consists of two main components. The first field, \texttt{sampleCount}, 
+indicates the number of valid sensor samples contained in the current payload. This 
+allows the GUI to correctly interpret how many sensor entries are included in a single 
+transmission.
+
+The second component is an array of \texttt{mng\_sensorDataPacked\_t} structures. Each 
+entry in this array represents one sensor sample and contains the elapsed time since 
+system startup, the sampled sensor value, and a sensor-specific identifier. This design 
+allows the GUI to distinguish between different sensors and associate each measurement 
+with an accurate timestamp.
+
+Both structures are declared with the \texttt{\_\_attribute\_\_((packed))} attribute. 
+This ensures that no compiler-introduced padding bytes are added, resulting in a 
+deterministic and compact memory layout. Such a layout is critical for network 
+transmission, as it guarantees consistency between the embedded system and the GUI 
+regardless of platform or compiler differences.
+
+The payload size is bounded by the \texttt{MNG\_PAYLOAD\_SIZE} macro, which is chosen 
+to ensure that the complete payload fits within a single TCP/IP packet. This minimizes 
+fragmentation and improves transmission efficiency and reliability.
+
+\begin{lstlisting}[language=C,
+caption={Network Payload Structures},
+label={lst:payloads}]
+typedef struct {
+    uint64_t  elapsedTime;   /* Time Info */
+    uint32_t  sensorVal;     /* Sensor sampled data*/
+    uint32_t  sensorID;      /* Sensor specific ID*/
+}__attribute__((packed)) mng_sensorDataPacked_t;
+
+
+typedef struct {
+    uint32_t sampleCount;
+    mng_sensorDataPacked_t sendBuf[MNG_PAYLOAD_SIZE];
+}__attribute__((packed)) mng_Payload_t;
+\end{lstlisting}
+
+\subsubsection{Software Configuration (\texttt{mng\_config})}
+
+The \texttt{mng\_config} file is the central configuration header for the application layer.
+ It defines all compile-time parameters that control the behavior of the software, 
+ including buffer sizes, timing parameters, network settings, sensor identifiers, 
+ and command definitions. By collecting these parameters in a single configuration 
+ file, the application becomes easier to maintain, extend, and adapt to new 
+ requirements without modifying the core implementation.
+
+One of the most important configuration groups is related to buffer management. 
+The ring buffer length is defined by \texttt{MNG\_RBUF\_LENGTH}, which determines how many 
+sensor samples can be stored before transmission to the GUI. The optional 
+\texttt{MNG\_RBUF\_OVERWRITE} macro enables overwrite behavior, allowing the buffer to replace 
+the oldest data when it becomes full. This approach prevents buffer overflow and 
+ensures continuous operation in long-running systems.
+
+The configuration file also defines timing and sampling parameters. The macro 
+\texttt{MNG\_BASE\_FREQ\_HZ} specifies the base frequency of the sensor sampling loop, which 
+is fixed at 1000 Hz. This value represents the maximum sampling resolution of the 
+system. The sensor thread sleeps for \texttt{MNG\_SENSOR\_LOOP\_INTERVAL\_US} 
+microseconds, resulting in a 1 ms loop period. Initial sensor sampling frequency 
+is set using \texttt{MNG\_INITIAL\_FREQ\_HZ}, allowing sensors to start with a known and safe 
+default rate.
+
+Network-related parameters are also configured in this file. The TCP/IP server 
+port is defined by \texttt{MNG\_NETWORK\_PORT}, and the maximum number of command parameters 
+is controlled by \texttt{MNG\_CMD\_MAX\_PARAMS}. These macros ensure consistent communication 
+behavior between the embedded system and the GUI.
+
+The file further includes hardware-related definitions, such as the device file 
+path of the custom kernel module (/dev/meascdd) and register numbers for different 
+sensors and peripherals. Since the application communicates with a custom IP core, 
+register numbers such as ADC, temperature sensor, switch/button inputs, and LED 
+outputs must be defined explicitly. Placing these definitions in the configuration 
+file allows hardware changes to be handled with minimal software modification.
+
+Each sensor is also assigned a unique sensor ID, which is used throughout the 
+application and by the GUI to identify sensor data. These IDs ensure that sensor 
+samples remain distinguishable when transmitted over the network.
+
+Another critical configuration group is the payload and command definitions. 
+The \texttt{MNG\_PAYLOAD\_SIZE} macro determines how many sensor samples are included in a 
+single network packet. This value is carefully selected to ensure that the total 
+packet size remains below the Ethernet MTU limit, preventing IP fragmentation. 
+Command macros define all supported client–server interactions, such as requesting 
+data, setting sensors to dormant mode, changing sampling frequency, writing to LEDs,
+and shutting down the application.
+
+Finally, the configuration file declares the global SHUTDOWN variable, which is 
+used as a runtime control flag shared across threads. This variable allows the GUI 
+to safely terminate the application by signaling all threads to exit their execution 
+loops.
+
+Overall, \texttt{mng\_config} provides a clean separation between configuration and 
+implementation. This design improves code readability, enhances portability, and 
+allows rapid system tuning without requiring invasive code changes.
+
+
+
+\begin{lstlisting}[language=C,
+caption={Software Configuration Header File},
+label={lst:config}]
+#ifndef MNG_CONFIG_H
+#define MNG_CONFIG_H
+
+
+/* Length of the Ring Buffer*/
+#define MNG_RBUF_LENGTH                  104U
+/* Overwrite of sampled datas to buffer *Uncomment to use*  */
+#define MNG_RBUF_OVERWRITE
+/* Base frequency is maximum frequency that sensor can sampled. */
+#define MNG_BASE_FREQ_HZ                 1000U
+/* 1 ms sensor loop sleep value. (microsec) */     
+#define MNG_SENSOR_LOOP_INTERVAL_US      1000
+/* Initial frequency  for sampling sensors is 10 Hz */
+#define MNG_INITIAL_FREQ_HZ              10U
+/* Command buffer to store client's commands. */
+#define MNG_CMD_MAX_PARAMS               2
+/* Network port for server. */
+#define MNG_NETWORK_PORT                 50012
+/* Network Timeout Value in us for Select API */
+#define MNG_NETWORK_TIMEOUT_US           1000
+/* Meascdd device driver file descriptor directory. */
+#define MNG_MEASCDD_FILE_DESCRIPTOR      "/dev/meascdd"
+/* ADC Sensor Register Number*/
+#define MNG_IP_ADC_SENSOR_REGNUM         5
+/* MAX Sensor Register Number*/
+#define MNG_IP_MAX_SENSOR_REGNUM         2
+/* Switch and Buttons Register Number*/
+#define MNG_IP_SWITCH_BUTTONS_REGNUM     0
+/* LED output Register Number*/
+#define MNG_IP_LEDS_REGNUM               0
+/* Specific sensor ID for sensor */
+#define MNG_ADC0_SENSOR_ID               1U
+/* Specific sensor ID for sensor */
+#define MNG_ADC1_SENSOR_ID               2U
+/* Specific sensor ID for sensor */
+#define MNG_TEMP_SENSOR_ID               3U
+/* Specific sensor ID for sensor */
+#define MNG_SWBTN_SENSOR_ID              4U
+/* Size of payload which is going to send */
+#define MNG_PAYLOAD_SIZE                 104U
+
+
+/*  Command definitions (Client <-> Server)  */
+#define MNG_CMD_DORMANT_ADC0    0x01U  // Set adc0 to dormant
+#define MNG_CMD_DORMANT_ADC1    0x20U  // Set adc1 to dormant
+#define MNG_CMD_DORMANT_TEM     0x03U  // Set temperature to dormant
+#define MNG_CMD_DORMANT_SWBUTT  0x0BU  // Set switch-buttons to dormant
+#define MNG_CMD_WLED            0x09U  // write LED
+#define MNG_CMD_REQ_DATA        0xFFU  // Request data
+#define MNG_CMD_SHUTDOWN        0x30U  // Shutdown the application
+#define MNG_CMD_SET_FREQ        0x0CU  // Set frequency command
+#define MNG_CMD_SET_FREQ_TMP    0x0DU  // Set frequency for temperature 
+#define MNG_CMD_SET_FREQ_ADC0   0x0EU  // Set frequency for adc0 
+#define MNG_CMD_SET_FREQ_ADC1   0x0FU  // Set frequency for adc1 
+#define MNG_CMD_SET_FREQ_SWBT   0x10U  // Set frequency for swbtn 
+
+
+/* Extern shutdown variable */
+extern uint32_t SHUTDOWN;
+
+#endif //MNG_CONFIG_H
+\end{lstlisting}
+
+\newpage
+\subsection{Software Related Requirement Analysis }
+This section analyzes the software-related requirements of the project and explains 
+how the proposed software design and implementation satisfy these requirements. 
+Each requirement is evaluated individually, and the corresponding software 
+mechanisms, design decisions, and implementation details are discussed. The goal 
+of this analysis is to demonstrate that the developed software system meets the 
+functional, performance, and reliability expectations defined at the beginning of 
+the project.
+
+The requirements cover several aspects of the system, including sensor management, 
+data buffering, real-time sampling behavior, network communication, configurability, 
+and interaction with custom hardware through the Linux kernel. By mapping each 
+requirement to concrete software components and APIs, this section provides a clear 
+justification of the design choices and validates the correctness and completeness 
+of the implemented solution.
+
+\subsubsection{Functional Requirements}
+
+
+\begin{tcolorbox}[
+    title=REQ-1,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The Measurement Network Gateway (MNG) shall collect sensor data from various
+sources at configurable sampling rates and send the measurements over Ethernet
+to a control computer. The MNG shall operate as a TCP server, while the control
+computer shall act as a TCP client.
+\end{tcolorbox}
+
+
+\paragraph{REQ-1 Analysis and Software Mapping}\
+
+REQ-1 is fully satisfied by the combined operation of the sensor management and 
+network modules in the application layer.
+
+The TCP/IP communication requirement is handled by the network module. The 
+\texttt{mng\_networkInit} API initializes the TCP server by creating a socket, binding it to 
+a predefined network port, and putting it into listening mode. This design ensures 
+that the MNG operates as a TCP server, while the control computer connects as a TCP 
+client. The \texttt{mng\_networkAccept} and \texttt{mng\_networkSend} APIs further support reliable 
+bidirectional communication over Ethernet.
+
+Sensor data collection at configurable sampling rates is achieved through the sensor 
+management module. The \texttt{mng\_sensorInit} API allows each sensor instance to be 
+initialized with a user-defined sampling frequency. This frequency is converted into
+a sampling period based on the system’s base frequency, enabling precise timing 
+control. The sampling behavior is implemented in the \texttt{mng\_sensorRead} API, which 
+ensures that sensor data is acquired only when the calculated sampling period 
+expires.
+
+By combining configurable sensor sampling through the sensor module and reliable 
+Ethernet-based data transmission through the network module, the software 
+architecture meets all aspects of REQ-1.
+
+
+\begin{tcolorbox}[
+    title=REQ-2,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The MNG shall acquire data from a precision resitive tempereature sensor.
+\end{tcolorbox}
+
+\paragraph{REQ-2 Analysis and Software Mapping}\
+
+REQ-2 is satisfied by the sensor management module through the temperature-specific 
+sensor reading API. The \texttt{mng\_sensorReadTemp} function is responsible for acquiring 
+data from the precision resistive temperature sensor. Although its internal 
+implementation is tailored to the temperature sensor and the underlying custom IP, 
+its overall design philosophy is consistent with the generic sensor reading mechanism 
+used throughout the system.
+
+This function follows the same timing and control logic as the general sensor read 
+API, including sampling period control and timestamp acquisition, while handling 
+temperature-specific register access and data interpretation. By providing a 
+dedicated API for temperature sensing, the software ensures accurate and reliable 
+acquisition of temperature data, thereby fulfilling the requirements of REQ-2.
+
+\begin{tcolorbox}[
+    title=REQ-3,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The MNG shall capture data from 2 ADCs.
+\end{tcolorbox}
+
+\paragraph{REQ-3 Analysis and Software Mapping}\
+
+REQ-3 is fulfilled by the sensor management module through the \texttt{mng\_sensorReadADC} 
+API. This function is responsible for acquiring data from ADC-based sensors and is 
+designed to handle multiple ADC instances using the same reading logic.
+
+Both ADC channels are represented as separate sensor instances within the 
+application, each configured with its own register number and sensor ID. The 
+\texttt{mng\_sensorReadADC} function applies identical sampling, timing, and data acquisition 
+mechanisms to both ADCs, ensuring consistent and reliable data capture from each 
+channel.
+
+By supporting multiple ADC instances through a unified ADC reading API, the software 
+architecture meets the requirement of capturing data from two ADCs.
+
+
+\begin{tcolorbox}[
+    title=REQ-4,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The MNG shall acquire digital data from switches.
+\end{tcolorbox}
+
+\paragraph{REQ-4 Analysis and Software Mapping}\
+
+REQ-4 is satisfied by the sensor management module through the generic 
+\texttt{mng\_sensorRead}  API. Digital switch inputs are treated as sensor instances within 
+the application and are accessed through the same register-based mechanism used 
+for other sensors.
+
+
+\begin{tcolorbox}[
+    title=REQ-5,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The MNG shall acquire digital data from pushbuttons.
+\end{tcolorbox}
+
+\paragraph{REQ-5 Analysis and Software Mapping}\
+
+REQ-5 is fulfilled by the sensor management module using the generic \texttt{mng\_sensorRead} 
+API. Pushbuttons are handled as digital sensor instances and accessed via the 
+same register-based interface as other digital inputs.
+
+
+\begin{tcolorbox}[
+    title=REQ-6,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+For each sensor signal a sampling rate shall be configurable.
+\end{tcolorbox}
+
+\paragraph{REQ-6 Analysis and Software Mapping}\
+
+REQ-6 is satisfied by the sensor management module through the use of a configurable 
+sampling mechanism implemented in the sensor handle structure. Each sensor instance 
+contains a samplePeriod attribute, which directly controls how often the sensor is 
+sampled.
+
+The sampling period is calculated based on a user-defined sampling frequency and 
+the system base frequency. This mechanism allows each sensor to operate at an 
+independent sampling rate. Furthermore, the sampling frequency can be reconfigured 
+at runtime through commands sent by the client application. These commands are 
+parsed by the network module and applied to the corresponding sensor instances by 
+updating their frequency-related attributes.
+
+By supporting per-sensor sampling period configuration and runtime updates via 
+network commands, the software fully meets the requirements of REQ-6.
+
+\begin{tcolorbox}[
+    title=REQ-8,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+Every measurement shall have an associated time stamp.
+\end{tcolorbox}
+
+\paragraph{REQ-8 Analysis and Software Mapping}\
+
+REQ-8 is fulfilled by including a dedicated elapsedTime attribute in each 
+sensor instance structure. This attribute records the time elapsed since the 
+application startup for each sample.
+
+The value of elapsedTime is obtained using the \texttt{mng\_getElapsedTime}  API in the sensor 
+module, which calculates the time in microseconds based on a monotonic system clock. 
+By storing this timestamp alongside each sensor value, the software ensures that 
+every measurement is accurately time-stamped, satisfying the requirement of REQ-8
+
+
+\subsubsection{Design Requirements}
+
+\begin{tcolorbox}[
+    title=REQ-13,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The application shall be developed for Embedded Linux. Symmetric multiprocessing, 
+many processes/threads and several existing network protocol stacks require the use 
+of Embedded Linux.
+\end{tcolorbox}
+
+\paragraph{REQ-13 Analysis and Software Mapping}\
+
+REQ-13 is satisfied as the entire application is developed to run on an Embedded 
+Linux platform using PetaLinux. The software leverages Linux kernel modules for 
+hardware access, POSIX threads for concurrency, and standard Linux APIs for timing 
+and networking
+
+
+\begin{tcolorbox}[
+    title=REQ-14,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The application program shall be coded in multitthreaded form.
+\end{tcolorbox}
+
+\paragraph{REQ-14 Analysis and Software Mapping}\
+
+REQ-14 is satisfied by designing the application in a multithreaded form. In the 
+main application file, two separate threads are created:
+
+Sensor Thread – responsible for sampling sensors and pushing the data to the ring buffer.
+
+Network Thread – responsible for sending the collected data to the GUI, receiving commands, and parsing them.
+
+By separating sensor acquisition and network communication into independent threads, the application ensures concurrent execution and efficient handling of I/O and processing tasks, fulfilling the requirement of REQ-14.
+
+\begin{tcolorbox}[
+    title=REQ-16,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The Ethernet connection shall transfer data in binary form.
+For performance reasons ASCII conversions are not allowed.
+\end{tcolorbox}
+
+\paragraph{REQ-16 Analysis and Software Mapping}\
+
+
+REQ-16 is fulfilled as all communication between the MNG (TCP server) and the 
+control computer (TCP client) is performed using binary data. Sensor data packets 
+\texttt{mng\_Payload\_t} are sent as packed binary structures, preserving the sensor values, 
+IDs, and timestamps. Similarly, commands from the client are transmitted using the 
+\texttt{Clnt\_Send\_struct}, also in packed binary form. 
+
+By sending and receiving all data in binary, the software ensures efficient, 
+precise, and unambiguous communication over Ethernet, satisfying REQ-16.
+
+
+\begin{tcolorbox}[
+    title=REQ-17,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The payload for a single TCP/IP transmission is limited to 1,500 bytes.
+Results in a single ethernet frame transmission for maximum performance.
+\end{tcolorbox}
+
+\paragraph{REQ-17 Analysis and Software Mapping}\
+
+REQ-17 is satisfied by controlling the size of the transmitted payload using the 
+\texttt{MNG\_PAYLOAD\_SIZE}  macro. This macro defines the number of sensor entries included 
+in a single packet. The  \texttt{mng\_Payload\_t} structure is carefully sized so that, when 
+populated with \texttt{MNG\_PAYLOAD\_SIZE} entries, the total packet size remains less 
+than 1,500 bytes, ensuring that each TCP/IP transmission does not exceed the 
+Ethernet maximum transmission unit (MTU).
+
+By enforcing this limit at compile time, the software guarantees safe, efficient, 
+and non-fragmented network communication, meeting the requirements of REQ-17.
+
+\subsubsection{RAMS Requirements}
+
+\begin{tcolorbox}[
+    title=REQ-18,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The application shall provide complete startup and shutdown procedures.
+\end{tcolorbox}
+
+\paragraph{REQ-18 Analysis and Software Mapping}\
+
+REQ-18 is fulfilled through the implementation of controlled startup and shutdown 
+mechanisms. The SHUTDOWN global variable serves as a runtime flag that governs the 
+lifecycle of the application threads.
+
+At startup, sensor and network threads are created and initialized, and the system 
+enters its main operational loop.
+
+At shutdown, the SHUTDOWN variable is set to 0 (e.g., via a client command), 
+signaling all threads to exit their loops gracefully. Threads then close resources 
+such as file descriptors and sockets before terminating.
+
+This mechanism ensures a reliable and orderly startup and shutdown process, fully 
+satisfying REQ-18.
+
+
+\begin{tcolorbox}[
+    title=REQ-19,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+On startup all resources shall be initialized.
+\end{tcolorbox}
+
+\paragraph{REQ-19 Analysis and Software Mapping}\
+
+REQ-19 is satisfied by explicitly initializing all required resources at the 
+beginning of the application. During main function, the software performs the following 
+initializations:
+
+\begin{itemize}
+    \item \textbf{Mutexes} -- Used to protect shared resources, such as the ring buffer, from concurrent access issues.
+    \item \textbf{Threads} -- Creation of dedicated sensor and network threads to allow for concurrent execution and modularity.
+    \item \textbf{Sensor Instances} -- Configuration of sensor handle structures, including default frequency, register addresses, IDs, and initial states.
+    \item \textbf{Ring Buffer} -- Allocation and clearing of memory buffers specifically designed for the cyclic storage of sensor data.
+    \item \textbf{Network Server} -- Initialization of the TCP/IP server stack to facilitate communication with external clients.
+\end{itemize}
+
+By performing these initializations at startup, the application ensures that all 
+resources are ready for normal operation, meeting the requirements of REQ-19.
+
+\begin{tcolorbox}[
+    title=REQ-20,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+On termination of the application all sensors shall be disabled (power down if applicable)
+\end{tcolorbox}
+
+\paragraph{REQ-20 Analysis and Software Mapping}\
+
+
+\begin{tcolorbox}[
+    title=REQ-21,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+On termination of the application all allocated resources shall be destroyed, all 
+threads should terminate.
+\end{tcolorbox}
+
+\paragraph{REQ-21 Analysis and Software Mapping}\
+
+REQ-21 is satisfied by implementing a controlled termination sequence in the main 
+application code. When a termination event occurs, all running threads exit their 
+execution loops and terminate using the \texttt{pthread\_exit} mechanism. The main thread then 
+waits for the completion of all worker threads by calling the \texttt{pthread\_join} API, 
+ensuring that no thread remains active. After all threads have terminated, shared 
+resources such as mutexes used for synchronization are explicitly destroyed in the 
+final stage of the main function. This approach guarantees that all allocated resources 
+are properly released and that the application terminates in a clean and deterministic 
+manner. Further details of this process can be observed in the main application module.
+
+\subsubsection{Test Requirements}
+
+
+\begin{tcolorbox}[
+    title=REQ-25,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The on-board switches and push buttons shall be used as auxilliary digital input signals
+\end{tcolorbox}
+
+\paragraph{REQ-25 Analysis and Software Mapping}\
+REQ-25 is fulfilled by integrating the on-board switches and pushbuttons as digital 
+sensor inputs within the sensor management module. These inputs are sampled using the 
+same generic sensor acquisition mechanism as other digital sensors and are treated as 
+auxiliary input signals.
+
+By sampling and processing switch and pushbutton data alongside other sensor 
+measurements, the application effectively utilizes the on-board digital inputs, 
+thereby satisfying the requirements of REQ-25.
+
+\begin{tcolorbox}[
+    title=REQ-26,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+The functional requirements shall be tested by suitable test setups.
+\end{tcolorbox}
+
+\paragraph{REQ-26 Analysis and Software Mapping}\
+
+REQ-26 is fulfilled through comprehensive testing using suitable test setups, which are 
+described in detail in the dedicated testing section of this report. Each functional 
+requirement is verified using targeted test scenarios designed to validate correct 
+behavior under normal and boundary conditions.
+
+By systematically evaluating the software against defined test setups, the project 
+ensures that all functional requirements are met. A detailed explanation of the test 
+methodology, tools, and results is provided in the Test and Verification section.
+
+
+\begin{tcolorbox}[
+    title=REQ-27,
+    colback=gray!5,
+    colframe=black,
+    fonttitle=\bfseries
+]
+Timing precision (i.e. delay / jitter) shall be measured and evaluated.
+\end{tcolorbox}
+
+\paragraph{REQ-27 Analysis and Software Mapping}\
+
+Timing precision refers to how accurately and consistently the application meets the configured sensor sampling periods.
+Although the Measurement Network Gateway (MNG) runs on Embedded Linux and does not provide hard real-time guarantees, timing behavior can still be measured, evaluated, and analyzed.
+
+In the implemented software:
+\begin{itemize}
+    \item Every sensor sample is associated with a timestamp (elapsedTime)
+    \item Timestamps are obtained using the monotonic system clock via the sensor module
+    \item Sampling periods are configurable at run-time
+    \item Actual sampling intervals can be calculated from consecutive timestamps
+\end{itemize}
+
+
+
+
+
+
+
+
+
+Using this information, delay and jitter are derived by comparing the expected sampling period with the actual measured intervals.
+
+Therefore, REQ-27 is fulfilled by measuring and evaluating timing behavior, rather than enforcing strict real-time constraints.
+
+\newpage
+\subsection{Test and Verification}
+
+\subsubsection{Test Architecture Strategy}
+To verify the functionality of the MNG system in a controlled and repeatable 
+manner, a dedicated test subfolder was created. This test environment reuses the 
+same public APIs and modules as the main application (sensor, ring buffer, and 
+network layers), ensuring that the behavior under test closely matches the real 
+system behavior.
+
+Where direct hardware access was required (e.g., ADC and temperature sensors), 
+mock implementations were introduced. This approach enables full system-level 
+testing without physical hardware, while preserving the original application logic 
+and interfaces.
+
+
+\subsubsection{Mock Sensor APIs}
+
+Some sensor-related APIs in the main application depend on real hardware. To allow 
+deterministic and hardware-independent testing, the following mock APIs were 
+implemented:
+\begin{itemize}
+    \item mock\_mng\_sensorReadadc()
+    \item mock\_mng\_sensorReadtemp()
+\end{itemize}
+
+The only difference from the real implementation is the source of the sensor 
+values. Instead of reading from physical hardware registers, the mock sensor APIs 
+obtain fake (synthetic) sensor values generated by a dedicated signal generator 
+task.
+
+This signal generator task runs independently and continuously produces realistic 
+sensor waveforms, which are then safely shared with the mock sensor APIs using 
+mutex-protected data structures. As a result:
+
+\begin{itemize}
+    \item The rest of the system remains completely unaware that the sensors are mocked
+    \item Ring buffer, networking, and GUI behavior are tested under realistic conditions
+    \item Functional correctness and timing behavior are verified without hardware dependency
+\end{itemize}
+
+This approach ensures that the test environment is both deterministic and 
+representative of real system operation, while maintaining full compatibility with 
+the production codebase. The mock sensor read APIs are shown in the following listing.
+
+
+\begin{lstlisting}[language=C,
+caption={Mock Sensor Reading APIs},
+label={lst:Clnt_Send_struct}]
+MNG_SENSOR_STAT mock_mng_sensorReadadc(mng_sensorHandle_t *me)
+{
+    if (me->sensorDormant != 0U)
+        return MNG_SENSOR_DORMANT;
+
+    me->samplePeriod--;
+
+    if (me->samplePeriod == 0U)
+    {
+        pthread_mutex_lock(&signalMutex);
+
+        if (me->sensorID == MNG_ADC0_SENSOR_ID)
+            me->sensorValue = gSignals.adc0; // generated fake sensor values
+        else if (me->sensorID == MNG_ADC1_SENSOR_ID)
+            me->sensorValue = gSignals.adc1; // generated fake sensor values
+
+        me->elapsedTime = mng_getElapsedTime();
+
+        pthread_mutex_unlock(&signalMutex);
+
+        me->samplePeriod = MNG_BASE_FREQ_HZ / me->sensorFreq;
+        return MNG_SENSOR_OK;
+    }
+
+    return MNG_SENSOR_WAIT;
+}
+
+
+
+MNG_SENSOR_STAT mock_mng_sensorReadtemp(mng_sensorHandle_t *me)
+{
+    if (me->sensorDormant != 0U)
+        return MNG_SENSOR_DORMANT;
+
+    me->samplePeriod--;
+    if (me->samplePeriod == 0U)
+    {
+
+        pthread_mutex_lock(&signalMutex);
+
+        me->sensorValue = gSignals.temp; // generated fake sensor values
+        me->elapsedTime = mng_getElapsedTime();
+
+        pthread_mutex_unlock(&signalMutex);
+
+        me->samplePeriod = MNG_BASE_FREQ_HZ / me->sensorFreq;
+        return MNG_SENSOR_OK;
+
+    }
+    
+    return MNG_SENSOR_WAIT;
+}
+\end{lstlisting}
+
+
+\subsubsection{Signal Generated Task}
+
+To emulate realistic sensor data, a dedicated thread called \texttt{mockSignalGeneratorTask} was implemented.
+Thisk task handles following things:
+
+
+\begin{itemize}
+    \item Runs periodically at 1 kHz
+    \item Generates synthetic signals for ADC0, ADC1 and Temperature sensor
+    \item Uses sinusoidal waveforms with configurable frequency and amplitude
+\end{itemize}
+
+The generated signals are stored in a shared structure \texttt{(gSignals)} 
+protected by a mutex to guarantee thread safety. Mock sensor APIs read these 
+values when their sampling period expires. Following listing shows how to configure
+signals and mock signal generator task.
+
+
+\begin{lstlisting}[language=C,
+caption={Signal Configuration},
+label={lst:Clnt_Send_struct}]
+static mng_signal_cfg_t adc0Sig = { .freq_hz = 5.0, .amplitude = 1500.0 };
+static mng_signal_cfg_t adc1Sig = { .freq_hz = 0.5, .amplitude = 800.0 };
+static mng_signal_cfg_t tempSig = { .freq_hz = 2.0, .amplitude = 2000.0 };
+\end{lstlisting}
+
+\newpage
+\begin{lstlisting}[language=C,
+caption={Mock Signal Generator Task},
+label={lst:Clnt_Send_struct}]
+void *mockSignalGeneratorTask(void *arg)
+{
+    (void)arg;
+
+    while (SHUTDOWN)
+    {
+        pthread_mutex_lock(&signalMutex);
+
+        gSignals.adc0 = gen_adc_signal(&adc0Sig, 4095);
+        gSignals.adc1 = gen_adc_signal(&adc1Sig, 4095);
+        gSignals.temp = gen_temp_signal(&tempSig);
+        gSignals.timestamp = mng_getElapsedTime();
+
+        pthread_mutex_unlock(&signalMutex);
+
+        usleep(SIGNAL_GEN_PERIOD_US);
+    }
+
+    return NULL;
+}
+\end{lstlisting}
+
+
+\subsubsection{Application and GUI Integration}
+
+Similarly to the main application file, the test application uses nearly the same 
+code structure for both the sensor task and the network task. This design choice 
+ensures that the behavior of the system under test closely matches the behavior 
+of the real application.
+
+The only difference between the main application and the test application is the 
+replacement of some sensor-related APIs with mock sensor APIs. These mocked APIs 
+are used solely to generate fake sensor values, while the overall sensor task 
+logic, timing, and scheduling remain unchanged.
+In contrast, the network task is completely identical to the one used in the main 
+application.
+
+The test application acts as a TCP server and connects to the GUI using the 
+loopback interface. For Linux-based systems, the loopback IP address 127.0.0.1 is 
+used. This allows the GUI and the test application to run on the same device 
+without requiring an external network connection.
+
+This setup enables reliable verification of:
+
+\begin{itemize}
+    \item Network initialization and client connection handling
+    \item Command reception and parsing from the GUI
+    \item Data transmission from the application to the GUI
+    \item End-to-end system behavior using realistic sensor data 
+\end{itemize}
+
+
+
+Using the loopback interface ensures low latency, stable communication, and a fully repeatable test environment.
+
+
+
+
+\newpage
+\subsection{Results}
+
+\subsubsection{Bandwidth Calculation}
+
+The network bandwidth of the system is determined primarily by the packet size and the client request rate. Each client request triggers the transmission of one fixed-size packet. Therefore, the required bandwidth $B$ is defined as:
+
+\begin{equation}
+B = 8 \cdot P \cdot f_r
+\end{equation}
+
+
+Where:
+\begin{itemize}
+    \item[] $B$: network bandwidth in bits per second (bps),
+    \item[] $P$: packet size in bytes, set to $1500$ bytes in this system,
+    \item[] $f_r$: client request frequency in Hz.
+\end{itemize}
+
+
+
+This equation assumes each request sends one packet containing up to $P$ bytes of payload.
+
+\subsection*{Example – Maximum request rate:}
+Given a packet size $P = 1500$ bytes and a client request rate $f_r = 1000$ Hz:
+
+\begin{equation}
+B = 1500 \cdot 8 \cdot 1000 = 12\,000\,000~\text{bits/s} = 12~\text{Mbps}
+\end{equation}
+
+
+This represents the maximum theoretical bandwidth if the client requests data as fast as the sensors generate it.
+
+
+\subsubsection{Effective Per-Sensor Update Rate}
+
+Although the network may support high bandwidth, the effective update rate per sensor is limited by both the sensor's internal sampling frequency and the network's payload capacity. This relationship is expressed by the following equation:
+
+\begin{equation}
+f_{\text{eff}} = \min \left( f_s, \frac{P \cdot f_r}{N \cdot S} \right)
+\end{equation}
+
+
+Where:
+\begin{itemize}
+    \item[] $f_{\text{eff}}$: effective sensor update rate at the GUI in Hz
+    \item[] $f_s$: sensor sampling frequency in Hz
+    \item[] $P$: packet size in bytes
+    \item[] $f_r$: client request rate in Hz
+    \item[] $N$: number of sensors
+    \item[] $S$: size of one sensor sample in bytes, set to 16 bytes in this system
+\end{itemize}
+
+
+The $\min()$ function ensures that the effective rate cannot exceed either the sensor's physical sampling rate or the network's delivery capacity.
+In other words, $f_{\text{eff}}$ represents the maximum possible effective update rate per sensor. 
+If the client requests data at a lower rate, the effective frequency is proportionally 
+lower, which is expected and acceptable.
+
+
+
+\subsubsection{Example 1 – High Request Rate}
+
+\textbf{System parameters:}
+\begin{itemize}
+    \item[] $P = 1500$ bytes
+    \item[] $S = 16$ bytes/sample
+    \item[] $N = 4$ sensors
+    \item[] $f_s = 1000$ Hz
+    \item[] $f_r = 1000$ Hz
+\end{itemize}
+
+\textbf{Effective per-sensor frequency:}
+\begin{equation}
+f_{\text{eff}} = \min \left( 1000, \frac{1500 \cdot 1000}{4 \cdot 16} \right) = \min(1000, 23\,437)
+\label{eq:exp1}
+\end{equation}
+
+
+Equation \ref{eq:exp1} above describes the effective sensor update rate at the GUI, 
+$f_\text{eff}$, as a function of the network bandwidth, packet size, client request 
+frequency, and sensor parameters. The derivation of this equation assumes that all 
+sensor samples fit within the payload of each client request, ensuring that no data is 
+left untransmitted. Furthermore, it is assumed that each sensor's effective update 
+rate can match its internal sampling frequency, meaning the GUI receives fresh data
+at the same rate the sensors generate it. Finally, the calculation assumes that there 
+is no data loss for any sensor, guaranteeing that every transmitted sample is 
+successfully received. These conditions together ensure that 
+$f_\text{eff}$ accurately represents the maximum sustainable update rate at the GUI under the 
+given network and sensor constraints.
+
+\subsubsection{Example 2 – Low Request Rate}
+
+\textbf{System parameters:}
+\begin{itemize}
+    \item[] $P = 1500$ bytes
+    \item[] $S = 16$ bytes/sample
+    \item[] $N = 4$ sensors
+    \item[] $f_s = 1000$ Hz
+    \item[] $f_r = 10$ Hz
+\end{itemize}
+
+\textbf{Effective per-sensor frequency:}
+\begin{equation}
+f_{\text{eff}} = \min \left( 1000, \frac{1500 \cdot 10}{4 \cdot 16} \right) = \min(1000, 234.375) \approx 234
+\label{eq:exp2}
+\end{equation}
+
+Although each sensor samples at 1000 Hz, the GUI receives updates at only approximately 
+234 Hz per sensor, as determined by the effective update rate $f_\text{eff}$ in Equation \ref{eq:exp2}. 
+This reduction is not due to the sensor's internal sampling speed or the physical 
+network bandwidth, but rather arises from the low client request rate, which limits 
+how frequently the GUI can poll the sensors. Consequently, the effective update rate 
+is constrained by the application-level request frequency rather than the hardware 
+capabilities.
+
+
+
+\subsubsection{Scalability Condition}
+
+To ensure no performance loss per sensor, the network's total payload capacity 
+and request frequency must satisfy the following inequality:
+
+\begin{equation}
+P \cdot f_r \geq N \cdot S \cdot f_s
+\label{eq:perf}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item[] $f_s$ refers to the sampling frequency of a single sensor.
+    \item[] $N$ accounts for the total number of sensors.
+    \item[] $N \cdot S \cdot f_s$ represents the total data volume generated per second by all sensors in the system.
+\end{itemize}
+
+
+In conclusion, the effective sensor update rate, $f_\text{eff}$ , depends on whether the system 
+meets the conditions defined in Equation \ref{eq:perf}. If these conditions are satisfied, 
+$f_\text{eff}$  equals the sensor sampling frequency $f_\text{s}$ , indicating that the system is 
+sensor-limited and operating at optimal performance. Conversely, if the conditions are 
+not satisfied, the per-sensor update rate is constrained by the payload size and client 
+request frequency, meaning the system is network-limited. In this scenario, the 
+performance of real-time tasks such as graphing sensor signals may be degraded, as the 
+GUI cannot receive updates as quickly as the sensors generate them.
+
+
+\subsubsection{Conclusion}
+
+The network bandwidth requirement at maximum request rate is 12 Mbps, which is well 
+within the capabilities of standard Ethernet and loopback interfaces. With the current 
+payload size, all sensor samples are delivered to the GUI without loss, even when the 
+sensors operate at their maximum sampling frequency. The maximum effective per-sensor 
+update rate is 1000 Hz, and lower client request rates reduce the effective update 
+frequency proportionally, which is expected behavior. This analysis confirms that the 
+network gateway design supports high-frequency, multi-sensor operation while 
+maintaining predictable per-sensor performance.

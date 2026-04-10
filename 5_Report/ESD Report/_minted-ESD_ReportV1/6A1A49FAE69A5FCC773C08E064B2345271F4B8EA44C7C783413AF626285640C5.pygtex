@@ -1,0 +1,8 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}pause\PYGZdq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{||}
+\PYG{+w}{	}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}stop\PYGZdq{}}\PYG{p}{))}
+\PYG{+w}{	}\PYG{p}{\PYGZob{}}
+\PYG{+w}{		}\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+\PYG{+w}{		}\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}\PYGZpc{}s acknowledged}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{);}
+\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

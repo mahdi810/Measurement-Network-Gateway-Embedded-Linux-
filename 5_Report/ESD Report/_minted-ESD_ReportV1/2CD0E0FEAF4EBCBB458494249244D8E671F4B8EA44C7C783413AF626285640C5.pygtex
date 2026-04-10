@@ -1,0 +1,7 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{	}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{server\PYGZus{}sock}\PYG{p}{;}
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{	}
+\PYG{+w}{	}\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server listening on port \PYGZpc{}d}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{PORT}\PYG{p}{);}
+\end{Verbatim}

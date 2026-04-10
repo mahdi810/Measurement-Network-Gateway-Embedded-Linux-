@@ -1,0 +1,42 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}start\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Not connected!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{transmitting}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Already transmitting!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+
+\PYG{+w}{	}\PYG{n}{Clnt\PYGZus{}Send\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{sendCmd}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{cmd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{MNG\PYGZus{}CMD\PYGZus{}REQ\PYGZus{}DATA}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{send}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{sendCmd}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{sendCmd}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}[GUI] Error sending start command\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Error sending command!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{memset}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{points}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{points}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{memset}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{].}\PYG{n}{points}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{].}\PYG{n}{points}\PYG{p}{));}
+
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{transmitting}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{g\PYGZus{}timeout\PYGZus{}add}\PYG{p}{(}\PYG{n}{INITIAL\PYGZus{}TIME\PYGZus{}INTERVAL\PYGZus{}REQ}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{GSourceFunc}\PYG{p}{)}\PYG{n}{data\PYGZus{}request\PYGZus{}timer}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Data acquisition started!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}start}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}stop}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}button\PYGZus{}set\PYGZus{}label}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}start}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Started\PYGZdq{}}\PYG{p}{);}
+
+
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Transmission started\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

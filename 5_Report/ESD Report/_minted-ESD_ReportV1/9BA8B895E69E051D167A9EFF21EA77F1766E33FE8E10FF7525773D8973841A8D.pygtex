@@ -1,0 +1,14 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{architecture}\PYG{+w}{ }\PYG{n+nc}{Behavioral}\PYG{+w}{ }\PYG{k}{of}\PYG{+w}{ }\PYG{n+nc}{sph1pol1}\PYG{+w}{ }\PYG{k}{is}
+
+\PYG{k}{type}\PYG{+w}{ }\PYG{n}{state\PYGZus{}type}\PYG{+w}{ }\PYG{k}{IS}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sidle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sstartx}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sstart\PYGZus{}lo}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sclk\PYGZus{}lo}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sclk\PYGZus{}hi}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{stop\PYGZus{}hi}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{stop\PYGZus{}lo}\PYG{p}{);}
+\PYG{k}{SIGNAL}\PYG{+w}{  }\PYG{n}{state}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{next\PYGZus{}state}\PYG{o}{:}\PYG{+w}{ }\PYG{n}{state\PYGZus{}type}\PYG{p}{;}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{sclk\PYGZus{}i}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{scsq\PYGZus{}i}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sdo\PYGZus{}i}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k+kt}{STD\PYGZus{}LOGIC}\PYG{p}{;}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{wr\PYGZus{}buf}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k+kt}{STD\PYGZus{}LOGIC\PYGZus{}VECTOR}\PYG{p}{(}\PYG{n}{USPI\PYGZus{}SIZE}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{rd\PYGZus{}buf}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k+kt}{STD\PYGZus{}LOGIC\PYGZus{}VECTOR}\PYG{p}{(}\PYG{n}{USPI\PYGZus{}SIZE}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{count}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k+kt}{integer}\PYG{+w}{ }\PYG{k}{RANGE}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{k}{TO}\PYG{+w}{ }\PYG{n}{USPI\PYGZus{}SIZE}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{;}
+
+\PYG{k}{type}\PYG{+w}{ }\PYG{n}{sslst\PYGZus{}type}\PYG{+w}{ }\PYG{k}{IS}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ssl\PYGZus{}idle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}start}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}run}\PYG{p}{);}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}state}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sslnxt\PYGZus{}state}\PYG{o}{:}\PYG{+w}{ }\PYG{n}{sslst\PYGZus{}type}\PYG{p}{;}
+\PYG{k}{SIGNAL}\PYG{+w}{ }\PYG{n}{start\PYGZus{}i}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k+kt}{STD\PYGZus{}LOGIC}\PYG{p}{;}
+\end{Verbatim}

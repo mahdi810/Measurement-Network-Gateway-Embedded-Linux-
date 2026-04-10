@@ -1,0 +1,19 @@
+# Eclipse/IDE
+.metadata/
+.project
+.settings/
+RemoteSystemsTempFiles/
+*.launch
+
+# Build outputs
+*.o
+*.obj
+*.exe
+*.out
+build/
+dist/
+
+# Archives
+*.zip
+*.tar
+*.tar.gz

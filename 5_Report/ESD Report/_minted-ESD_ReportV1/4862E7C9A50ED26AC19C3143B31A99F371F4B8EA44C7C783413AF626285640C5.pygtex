@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{[}\PYG{n}{CMD\PYGZus{}BUF\PYGZus{}SIZE}\PYG{p}{];}
+\end{Verbatim}

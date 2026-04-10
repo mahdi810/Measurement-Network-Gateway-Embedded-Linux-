@@ -1,0 +1,7 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{// When user checks ADC0 checkbox}
+\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}set\PYGZus{}active}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TOGGLE\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{checkboxes}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+
+\PYG{c+c1}{// Application validates 2\PYGZhy{}sensor rule and updates display}
+\PYG{n}{update\PYGZus{}dropdown}\PYG{p}{();}
+\end{Verbatim}

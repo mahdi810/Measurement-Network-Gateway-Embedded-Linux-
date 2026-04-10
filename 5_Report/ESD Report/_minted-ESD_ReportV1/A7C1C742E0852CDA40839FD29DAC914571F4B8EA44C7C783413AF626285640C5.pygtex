@@ -1,0 +1,9 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{config\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}
+\PYG{p}{\PYGZcb{};}
+\end{Verbatim}

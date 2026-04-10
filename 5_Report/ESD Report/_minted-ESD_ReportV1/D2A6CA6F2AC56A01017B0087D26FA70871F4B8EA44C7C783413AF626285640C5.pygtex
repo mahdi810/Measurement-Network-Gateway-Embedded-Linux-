@@ -1,0 +1,5 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{	}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{client\PYGZus{}sock}\PYG{p}{;}
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\end{Verbatim}

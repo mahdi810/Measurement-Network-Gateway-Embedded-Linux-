@@ -1,0 +1,20 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}configure\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}WARN: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Stop streaming before configuring\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}configure \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}TEMP}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}ADC0}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}ADC1}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}SWITCH}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}PUSHB}\PYG{p}{]);}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sensors configured\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

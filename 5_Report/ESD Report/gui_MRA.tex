@@ -1,0 +1,1055 @@
+\begin{minted}[bgcolor = lightgray, tabsize = 4, breaklines]{c}
+
+
+/*
+ * mng_client_gui_timestamp.c
+ *
+ * MNG Sensor Client - GTK3 + Cairo real-time visualization
+ * + In-window command terminal
+ * + AUTO-POLLING: sends "start" every T ms when streaming is active
+ * + SHUTDOWN button: sends "shutdown" to terminate the server process
+ *
+ * Compile:
+ *   gcc -Wall -O2 mng_client_gui_timestamp.c -o mng_client \
+ *       `pkg-config --cflags --libs gtk+-3.0` -lpthread -lm
+ */
+
+
+
+#include <gtk/gtk.h>
+#include <cairo.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <errno.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <math.h>
+#include <stdarg.h>
+
+/* ============ CONSTANTS ============ */
+#define SERVER_PORT              50012
+#define MAX_SAMPLES              2000
+#define MAX_SENSORS              5
+#define UPDATE_INTERVAL_MS       50
+#define DEFAULT_POLL_INTERVAL_MS 1
+
+#define SENSOR_TEMP   1
+#define SENSOR_ADC0   2
+#define SENSOR_ADC1   3
+#define SENSOR_SWITCH 4
+#define SENSOR_PUSHB  5
+
+typedef struct __attribute__((packed)) {
+    int32_t  sid;
+    int32_t  svalue;
+    int64_t  ts;
+} net_packet_t;
+
+typedef struct {
+    double  values[MAX_SAMPLES];
+    int64_t ts_us[MAX_SAMPLES];
+    int     count;
+    int     oldest_idx;
+    int64_t start_time_us;
+    pthread_mutex_t lock;
+} sensor_buffer_t;
+
+typedef struct {
+    const char *name;
+    double      color_r, color_g, color_b;
+} sensor_info_t;
+
+static sensor_info_t g_sensors[MAX_SENSORS + 1] = {
+    { "Unknown",          0.50, 0.50, 0.50 },
+    { "Temperature (°C)", 0.22, 0.74, 0.97 },
+    { "ADC0",             1.00, 0.33, 0.33 },
+    { "ADC1",             0.54, 0.36, 0.96 },
+    { "Switch",           0.06, 0.72, 0.50 },
+    { "Push Button",      0.96, 0.62, 0.05 }
+};
+
+/* ============ APP CONTEXT ============ */
+typedef struct {
+    GtkWidget     *window;
+    GtkWidget     *drawing_area;
+    GtkWidget     *ip_entry;
+    GtkWidget     *port_entry;
+    GtkWidget     *connect_btn;
+    GtkWidget     *disconnect_btn;
+    GtkWidget     *configure_btn;
+    GtkWidget     *start_btn;
+    GtkWidget     *pause_btn;
+    GtkWidget     *stop_btn;
+    GtkWidget     *shutdown_btn;  
+    GtkWidget     *status_label;
+    GtkWidget     *stats_box;
+    GtkWidget     *time_scale;
+    GtkWidget     *time_label_value;
+    GtkWidget     *rate_spin[MAX_SENSORS + 1];
+    GtkWidget     *sensor_check[MAX_SENSORS + 1];
+
+    GtkWidget     *cmd_entry;
+    GtkWidget     *cmd_log_view;
+    GtkTextBuffer *cmd_log_buffer;
+
+    GtkWidget     *poll_spin;
+    guint          polling_timer_id;
+    int            poll_interval_ms;
+
+    int          sockfd;
+    pthread_t    net_thread;
+    volatile int net_running;
+    volatile int net_connected;
+    volatile int should_close;
+
+    volatile int is_connected;
+    volatile int is_streaming;
+    int          sampling_rate[MAX_SENSORS + 1];
+    int          sensor_enabled[MAX_SENSORS + 1];
+
+    sensor_buffer_t buf[MAX_SENSORS + 1];
+
+    int          time_range_seconds;
+    int64_t      last_data_time_us;
+} app_t;
+
+static app_t g_app;
+
+/* ============ LOGGING ============ */
+static void log_msg(const char *tag, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s] ", tag);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+}
+
+static void terminal_log(const char *prefix, const char *text) {
+    if (!g_app.cmd_log_buffer) return;
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(g_app.cmd_log_buffer, &end);
+    char line[512];
+    snprintf(line, sizeof(line), "%s%s\n", prefix, text);
+    gtk_text_buffer_insert(g_app.cmd_log_buffer, &end, line, -1);
+    gtk_text_buffer_get_end_iter(g_app.cmd_log_buffer, &end);
+    GtkTextMark *mark = gtk_text_buffer_get_insert(g_app.cmd_log_buffer);
+    gtk_text_buffer_place_cursor(g_app.cmd_log_buffer, &end);
+    gtk_text_view_scroll_mark_onscreen(GTK_TEXT_VIEW(g_app.cmd_log_view), mark);
+}
+
+/* ============ SENSOR BUFFER API ============ */
+static void buffer_init(int sid) {
+    if (sid < 1 || sid > MAX_SENSORS) return;
+    sensor_buffer_t *b = &g_app.buf[sid];
+    pthread_mutex_init(&b->lock, NULL);
+    b->count = 0; b->oldest_idx = 0; b->start_time_us = 0;
+}
+
+static void buffer_add_sample(int sid, int value, int64_t ts_us) {
+    if (sid < 1 || sid > MAX_SENSORS) return;
+    sensor_buffer_t *b = &g_app.buf[sid];
+    pthread_mutex_lock(&b->lock);
+    if (b->count == 0) b->start_time_us = ts_us;
+    if (ts_us > g_app.last_data_time_us) g_app.last_data_time_us = ts_us;
+    if (b->count < MAX_SAMPLES) {
+        int idx = b->count++;
+        b->values[idx] = (double)value;
+        b->ts_us[idx]  = ts_us;
+    } else {
+        int idx = b->oldest_idx;
+        b->values[idx] = (double)value;
+        b->ts_us[idx]  = ts_us;
+        b->oldest_idx  = (b->oldest_idx + 1) % MAX_SAMPLES;
+    }
+    pthread_mutex_unlock(&b->lock);
+}
+
+static int buffer_get_copy(int sid, double *x_ms, double *y, int max_len) {
+    if (sid < 1 || sid > MAX_SENSORS) return 0;
+    sensor_buffer_t *b = &g_app.buf[sid];
+    pthread_mutex_lock(&b->lock);
+    if (b->count == 0) { pthread_mutex_unlock(&b->lock); return 0; }
+    int n = (b->count < max_len) ? b->count : max_len;
+    if (b->count < MAX_SAMPLES) {
+        for (int i = 0; i < n; ++i) {
+            x_ms[i] = (double)(b->ts_us[i] - b->start_time_us) / 1000.0;
+            y[i]    = b->values[i];
+        }
+    } else {
+        for (int i = 0; i < n; ++i) {
+            int idx  = (b->oldest_idx + i) % MAX_SAMPLES;
+            x_ms[i] = (double)(b->ts_us[idx] - b->start_time_us) / 1000.0;
+            y[i]    = b->values[idx];
+        }
+    }
+    pthread_mutex_unlock(&b->lock);
+    return n;
+}
+
+static int buffer_stats(int sid, double *minv, double *maxv,double *avg, int *count) 
+{
+    if (sid < 1 || sid > MAX_SENSORS) return 0;
+    sensor_buffer_t *b = &g_app.buf[sid];
+    pthread_mutex_lock(&b->lock);
+    if (b->count == 0) { pthread_mutex_unlock(&b->lock); return 0; }
+    double mn = b->values[0], mx = b->values[0], sum = 0.0;
+    for (int i = 0; i < b->count; ++i) {
+        double v = b->values[i];
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+        sum += v;
+    }
+    *minv = mn; *maxv = mx;
+    *avg  = sum / b->count;
+    *count = b->count;
+    pthread_mutex_unlock(&b->lock);
+    return 1;
+}
+
+/* ============ NETWORK THREAD ============ */
+static void *network_thread_func(void *arg) {
+    app_t *app = (app_t *)arg;
+    while (app->net_running) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) { log_msg("NET","socket error: %s", strerror(errno)); sleep(2); continue; }
+
+        struct sockaddr_in sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sin_family = AF_INET;
+        const char *ip    = gtk_entry_get_text(GTK_ENTRY(app->ip_entry));
+        const char *portc = gtk_entry_get_text(GTK_ENTRY(app->port_entry));
+        int port = portc ? atoi(portc) : SERVER_PORT;
+        sa.sin_port = htons((uint16_t)port);
+        if (inet_pton(AF_INET, ip, &sa.sin_addr) <= 0) {
+            log_msg("NET","invalid IP '%s'", ip); close(sock); sleep(2); continue;
+        }
+        if (connect(sock, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+            log_msg("NET","connect failed: %s", strerror(errno)); close(sock); sleep(2); continue;
+        }
+        log_msg("NET","connected to %s:%d", ip, port);
+        app->sockfd = sock; app->net_connected = 1;
+
+        uint8_t buf[4096]; size_t buf_len = 0;
+        while (app->net_running && app->net_connected) {
+            ssize_t n = recv(sock, buf + buf_len, sizeof(buf) - buf_len, 0);
+            if (n < 0) { log_msg("NET","recv error: %s", strerror(errno)); break; }
+            if (n == 0) { log_msg("NET","server closed connection"); break; }
+            buf_len += (size_t)n;
+            while (buf_len >= sizeof(net_packet_t)) {
+                net_packet_t pkt;
+                memcpy(&pkt, buf, sizeof(pkt));
+                memmove(buf, buf + sizeof(pkt), buf_len - sizeof(pkt));
+                buf_len -= sizeof(pkt);
+                buffer_add_sample(pkt.sid, pkt.svalue, pkt.ts);
+            }
+        }
+        app->net_connected = 0; close(sock); app->sockfd = -1;
+        log_msg("NET","disconnected, retrying in 2s..."); sleep(2);
+    }
+    log_msg("NET","network thread exiting");
+    return NULL;
+}
+
+/* ============ SEND COMMAND ============ */
+static void send_command(const char *cmd) {
+    if (g_app.sockfd >= 0) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s\n", cmd);
+        if (send(g_app.sockfd, buf, strlen(buf), 0) < 0) {
+            log_msg("CMD","send failed: %s", strerror(errno));
+            terminal_log("ERROR: ", strerror(errno));
+        } else {
+            log_msg("CMD","sent: %s", cmd);
+        }
+    } else {
+        terminal_log("ERROR: ", "Not connected to server");
+    }
+}
+
+/* ============ GUI HELPERS ============ */
+static void update_status(const char *text) {
+    gtk_label_set_text(GTK_LABEL(g_app.status_label), text);
+}
+
+/* ---- CHANGE 1/4: update_button_states — shutdown_btn sensitive only when connected ---- */
+static void update_button_states(void) {
+    gboolean connected = g_app.is_connected;
+    gboolean streaming = g_app.is_streaming;
+
+    gtk_widget_set_sensitive(g_app.connect_btn,    !connected);
+    gtk_widget_set_sensitive(g_app.disconnect_btn,  connected);
+    gtk_widget_set_sensitive(g_app.configure_btn,   connected && !streaming);
+    gtk_widget_set_sensitive(g_app.start_btn,       connected && !streaming);
+    gtk_widget_set_sensitive(g_app.pause_btn,       connected &&  streaming);
+    gtk_widget_set_sensitive(g_app.stop_btn,        connected &&  streaming);
+    gtk_widget_set_sensitive(g_app.shutdown_btn,    connected); 
+    gtk_widget_set_sensitive(g_app.ip_entry,       !connected);
+    gtk_widget_set_sensitive(g_app.port_entry,     !connected);
+    if (g_app.poll_spin)
+        gtk_widget_set_sensitive(g_app.poll_spin,  !streaming);
+}
+
+/* ============ AUTO-POLLING TIMER ============ */
+static gboolean on_poll_timer_cb(gpointer user_data) {
+    (void)user_data;
+    if (g_app.should_close) { g_app.polling_timer_id = 0; return FALSE; }
+    if (g_app.is_streaming && g_app.net_connected && g_app.sockfd >= 0)
+        send_command("start");
+    return TRUE;
+}
+
+static void polling_timer_start(void) {
+    if (g_app.polling_timer_id != 0) {
+        g_source_remove(g_app.polling_timer_id);
+        g_app.polling_timer_id = 0;
+    }
+    g_app.polling_timer_id = g_timeout_add(
+        (guint)g_app.poll_interval_ms, on_poll_timer_cb, NULL);
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Poll timer started at %d ms interval", g_app.poll_interval_ms);
+    log_msg("POLL", "%s", msg);
+}
+
+static void polling_timer_stop(void) {
+    if (g_app.polling_timer_id != 0) {
+        g_source_remove(g_app.polling_timer_id);
+        g_app.polling_timer_id = 0;
+        log_msg("POLL","Poll timer stopped");
+    }
+}
+
+static void on_poll_interval_changed(GtkSpinButton *spin, gpointer user_data) {
+    (void)user_data;
+    int new_val = gtk_spin_button_get_value_as_int(spin);
+    if (new_val < 1) new_val = 1;
+    g_app.poll_interval_ms = new_val;
+    if (g_app.is_streaming) {
+        polling_timer_start();
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Poll interval updated to %d ms", new_val);
+        terminal_log("INFO: ", msg);
+    }
+}
+
+/* ============ COMMAND TERMINAL ============ */
+static void process_terminal_command(const char *raw) {
+    char cmd[512];
+    strncpy(cmd, raw, sizeof(cmd) - 1);
+    cmd[sizeof(cmd) - 1] = '\0';
+    for (char *p = cmd; *p; p++)
+        if (*p == '\n' || *p == '\r') { *p = '\0'; break; }
+    char *trimmed = cmd;
+    while (*trimmed == ' ') trimmed++;
+    if (*trimmed == '\0') return;
+
+    terminal_log("> ", trimmed);
+
+    if (!strcmp(trimmed, "start")) {
+        if (!g_app.is_connected) { terminal_log("ERROR: ","Not connected"); return; }
+        g_app.is_streaming = 1;
+        update_status("STREAMING");
+        update_button_states();
+        polling_timer_start();
+        terminal_log("OK: ","Streaming started — polling server every T ms");
+
+    } else if (!strcmp(trimmed, "pause")) {
+        if (!g_app.is_streaming) { terminal_log("ERROR: ","Not streaming"); return; }
+        polling_timer_stop();
+        send_command("pause");
+        g_app.is_streaming = 0;
+        update_status("PAUSED");
+        update_button_states();
+        terminal_log("OK: ","paused");
+
+    } else if (!strcmp(trimmed, "stop")) {
+        if (!g_app.is_streaming) { terminal_log("ERROR: ","Not streaming"); return; }
+        polling_timer_stop();
+        send_command("stop");
+        g_app.is_streaming = 0;
+        update_status("Connected - Ready");
+        update_button_states();
+        terminal_log("OK: ","stopped");
+
+    } else if (!strncmp(trimmed, "configure ", 10)) {
+        send_command(trimmed);
+        terminal_log("OK: ","configure sent");
+
+    } else if (!strncmp(trimmed, "poll ", 5)) {
+        int ms = atoi(trimmed + 5);
+        if (ms < 1) ms = 1;
+        g_app.poll_interval_ms = ms;
+        if (g_app.poll_spin)
+            gtk_spin_button_set_value(GTK_SPIN_BUTTON(g_app.poll_spin), (gdouble)ms);
+        if (g_app.is_streaming) polling_timer_start();
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Poll interval set to %d ms", ms);
+        terminal_log("OK: ", msg);
+
+    } else if (!strcmp(trimmed, "disconnect")) {
+        polling_timer_stop();
+        send_command("disconnect");
+        g_app.is_connected  = 0;
+        g_app.is_streaming  = 0;
+        g_app.net_connected = 0;
+        update_status("Disconnected");
+        update_button_states();
+        terminal_log("OK: ","disconnected");
+
+    } else if (!strcmp(trimmed, "shutdown")) {
+        polling_timer_stop();
+        terminal_log("INFO: ","Sending shutdown to server...");
+        send_command("shutdown");
+        g_app.is_connected  = 0;
+        g_app.is_streaming  = 0;
+        g_app.net_connected = 0;
+        update_status("Server shutdown requested");
+        update_button_states();
+
+    } else if (!strcmp(trimmed, "help")) {
+        terminal_log("","Available commands:");
+        terminal_log("  ","start                   - Begin polling server every T ms");
+        terminal_log("  ","pause                   - Pause polling");
+        terminal_log("  ","stop                    - Stop polling");
+        terminal_log("  ","poll <ms>               - Change poll interval (e.g. poll 10)");
+        terminal_log("  ","configure T A0 A1 SW PB - Set server sampling rates (Hz)");
+        terminal_log("  ","disconnect              - Disconnect from server");
+        terminal_log("  ","shutdown                - Shut down the server program");
+        terminal_log("  ","help                    - Show this help");
+
+    } else {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Unknown command: '%s'  (type 'help')", trimmed);
+        terminal_log("ERROR: ", msg);
+    }
+}
+
+static void on_cmd_entry_activate(GtkEntry *entry, gpointer user_data) {
+    (void)user_data;
+    const char *text = gtk_entry_get_text(entry);
+    process_terminal_command(text);
+    gtk_entry_set_text(entry, "");
+}
+
+/* ============ DRAWING ============ */
+static gboolean on_draw_chart(GtkWidget *widget, cairo_t *cr, gpointer data) {
+    (void)data;
+    int width  = gtk_widget_get_allocated_width(widget);
+    int height = gtk_widget_get_allocated_height(widget);
+    if (width <= 0 || height <= 0) return FALSE;
+
+    cairo_set_source_rgb(cr, 0.06, 0.08, 0.10);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    int margin_left = 70, margin_right = 20,
+        margin_top  = 30, margin_bottom = 50;
+    int w = width  - margin_left - margin_right;
+    int h = height - margin_top  - margin_bottom;
+    if (w <= 0 || h <= 0) return FALSE;
+
+    cairo_set_source_rgba(cr, 0.16, 0.25, 0.37, 0.2);
+    cairo_set_line_width(cr, 0.5);
+    for (int i = 0; i <= 5; ++i) {
+        int y = margin_top + (h * i) / 5;
+        cairo_move_to(cr, margin_left, y);
+        cairo_line_to(cr, margin_left + w, y);
+        cairo_stroke(cr);
+    }
+    cairo_set_source_rgb(cr, 0.48, 0.48, 0.48);
+    cairo_set_line_width(cr, 1.5);
+    cairo_move_to(cr, margin_left, margin_top + h);
+    cairo_line_to(cr, margin_left + w, margin_top + h);
+    cairo_stroke(cr);
+    cairo_move_to(cr, margin_left, margin_top);
+    cairo_line_to(cr, margin_left, margin_top + h);
+    cairo_stroke(cr);
+
+    double x_buf[MAX_SAMPLES], y_buf[MAX_SAMPLES];
+    int any_data = 0, global_min_set = 0;
+    double global_min_val = 0.0, global_max_val = 0.0;
+    double global_min_time = 0.0, global_max_time = 0.0;
+
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        if (!g_app.sensor_enabled[sid]) continue;
+        int n = buffer_get_copy(sid, x_buf, y_buf, MAX_SAMPLES);
+        if (n < 1) continue;
+        any_data = 1;
+        for (int i = 0; i < n; ++i) {
+            double v = y_buf[i];
+            if (!global_min_set) {
+                global_min_val = global_max_val = v;
+                global_min_time = global_max_time = x_buf[i];
+                global_min_set = 1;
+            } else {
+                if (v        < global_min_val)  global_min_val  = v;
+                if (v        > global_max_val)  global_max_val  = v;
+                if (x_buf[i] < global_min_time) global_min_time = x_buf[i];
+                if (x_buf[i] > global_max_time) global_max_time = x_buf[i];
+            }
+        }
+    }
+
+    if (!any_data) {
+        cairo_set_source_rgb(cr, 0.7, 0.7, 0.7);
+        cairo_select_font_face(cr,"Sans",CAIRO_FONT_SLANT_NORMAL,CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_set_font_size(cr, 14);
+        cairo_move_to(cr, width * 0.5 - 80, height * 0.5);
+        cairo_show_text(cr, "Waiting for data...");
+        return FALSE;
+    }
+
+    double time_window_ms = (double)g_app.time_range_seconds * 1000.0;
+    double t_max = global_max_time;
+    double t_min = t_max - time_window_ms;
+    if (global_max_time - global_min_time < time_window_ms)
+        t_min = global_min_time;
+    double t_range = t_max - t_min;
+    if (t_range < 1.0) t_range = 1.0;
+
+    double y_range = (global_max_val > global_min_val)
+                     ? (global_max_val - global_min_val) : 1.0;
+    double y_pad = y_range * 0.1;
+    double y_min = global_min_val - y_pad;
+    double y_max = global_max_val + y_pad;
+    y_range = y_max - y_min;
+    if (y_range < 1.0) y_range = 1.0;
+
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        if (!g_app.sensor_enabled[sid]) continue;
+        int n = buffer_get_copy(sid, x_buf, y_buf, MAX_SAMPLES);
+        if (n < 1) continue;
+        cairo_set_source_rgb(cr, g_sensors[sid].color_r,
+                                 g_sensors[sid].color_g,
+                                 g_sensors[sid].color_b);
+        cairo_set_line_width(cr, 2.0);
+        int line_started = 0;
+        for (int i = 0; i < n; ++i) {
+            if (x_buf[i] < t_min || x_buf[i] > t_max) {
+                if (line_started) { cairo_stroke(cr); line_started = 0; }
+                continue;
+            }
+            double xx = margin_left + ((x_buf[i] - t_min) / t_range) * w;
+            double yy = margin_top + h - ((y_buf[i] - y_min) / y_range) * h;
+            if (!line_started) { cairo_move_to(cr, xx, yy); line_started = 1; }
+            else                { cairo_line_to(cr, xx, yy); }
+        }
+        if (line_started) cairo_stroke(cr);
+    }
+
+    cairo_set_source_rgb(cr, 0.88, 0.88, 0.88);
+    cairo_select_font_face(cr,"Monospace",CAIRO_FONT_SLANT_NORMAL,CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, 9);
+    for (int i = 0; i <= 5; ++i) {
+        char label[32];
+        snprintf(label, sizeof(label), "%.1f", y_max - (i * y_range / 5.0));
+        cairo_move_to(cr, margin_left - 65, margin_top + (h * i) / 5 + 4);
+        cairo_show_text(cr, label);
+    }
+    for (int i = 0; i <= 5; ++i) {
+        char label[32];
+        snprintf(label, sizeof(label), "%.0f", t_min + (i * t_range / 5.0));
+        cairo_move_to(cr, margin_left + (w * i) / 5 - 20, margin_top + h + 25);
+        cairo_show_text(cr, label);
+    }
+    cairo_set_source_rgb(cr, 0.88, 0.88, 0.88);
+    cairo_select_font_face(cr,"Sans",CAIRO_FONT_SLANT_NORMAL,CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size(cr, 12);
+    char title[128];
+    snprintf(title, sizeof(title),
+             "Real-Time Sensor Data — %.1f to %.1f ms", t_min, t_max);
+    cairo_move_to(cr, margin_left, margin_top - 10);
+    cairo_show_text(cr, title);
+    cairo_set_font_size(cr, 10);
+    cairo_move_to(cr, margin_left + w / 2 - 60, margin_top + h + 45);
+    cairo_show_text(cr, "Time (milliseconds)");
+    cairo_move_to(cr, 5, margin_top + h / 2);
+    cairo_show_text(cr, "Value");
+    return FALSE;
+}
+
+/* ============ STATS UPDATE ============ */
+static void update_stats_box(void) {
+    GList *children = gtk_container_get_children(GTK_CONTAINER(g_app.stats_box));
+    for (GList *l = children; l; l = l->next)
+        gtk_widget_destroy(GTK_WIDGET(l->data));
+    g_list_free(children);
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        if (!g_app.sensor_enabled[sid]) continue;
+        double mn, mx, avg; int count;
+        if (!buffer_stats(sid, &mn, &mx, &avg, &count)) continue;
+        char line[256];
+        snprintf(line, sizeof(line),
+                 "SID %d %-18s | Min: %8.1f  Max: %8.1f  Avg: %8.1f  (n=%4d)",
+                 sid, g_sensors[sid].name, mn, mx, avg, count);
+        GtkWidget *lab = gtk_label_new(NULL);
+        char markup[320];
+        snprintf(markup, sizeof(markup), "<tt>%s</tt>", line);
+        gtk_label_set_markup(GTK_LABEL(lab), markup);
+        gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
+        gtk_box_pack_start(GTK_BOX(g_app.stats_box), lab, FALSE, FALSE, 0);
+    }
+    gtk_widget_show_all(g_app.stats_box);
+}
+
+/* ============ PERIODIC GUI UPDATE ============ */
+static gboolean ui_update_cb(gpointer data) {
+    (void)data;
+    if (g_app.should_close) return FALSE;
+    if (g_app.is_connected && g_app.net_connected && !g_app.is_streaming)
+        update_status("Connected - Ready");
+    else if (g_app.is_connected && !g_app.net_connected)
+        update_status("Connecting...");
+    gtk_widget_queue_draw(g_app.drawing_area);
+    update_stats_box();
+    return TRUE;
+}
+
+/* ============ BUTTON CALLBACKS ============ */
+static void on_connect_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (g_app.is_connected) return;
+    g_app.is_connected = 1;
+    update_status("Connecting...");
+    update_button_states();
+    terminal_log("INFO: ","Connecting...");
+    if (!g_app.net_running) {
+        g_app.net_running = 1;
+        pthread_create(&g_app.net_thread, NULL, network_thread_func, &g_app);
+    }
+}
+
+static void on_disconnect_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (!g_app.is_connected) return;
+    polling_timer_stop();
+    send_command("disconnect");
+    g_app.is_connected  = 0;
+    g_app.is_streaming  = 0;
+    g_app.net_connected = 0;
+    update_status("Disconnected");
+    update_button_states();
+    terminal_log("INFO: ","Disconnected from server");
+}
+
+static void on_configure_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (!g_app.is_connected || g_app.is_streaming) {
+        update_status("Stop streaming first!"); return;
+    }
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        if (g_app.rate_spin[sid])
+            g_app.sampling_rate[sid] =
+                gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_app.rate_spin[sid]));
+    }
+    if (g_app.net_connected && g_app.sockfd >= 0) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "configure %d %d %d %d %d",
+                 g_app.sampling_rate[SENSOR_TEMP],
+                 g_app.sampling_rate[SENSOR_ADC0],
+                 g_app.sampling_rate[SENSOR_ADC1],
+                 g_app.sampling_rate[SENSOR_SWITCH],
+                 g_app.sampling_rate[SENSOR_PUSHB]);
+        send_command(cmd);
+        terminal_log("INFO: ", cmd);
+        update_status("Sensors configured");
+    }
+}
+
+static void on_start_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (!g_app.is_connected) { update_status("Not connected!"); return; }
+    if (!g_app.net_connected || g_app.sockfd < 0) {
+        update_status("TCP not yet connected to server"); return;
+    }
+    g_app.is_streaming = 1;
+    update_status("STREAMING");
+    update_button_states();
+    polling_timer_start();
+    terminal_log("INFO: ","Streaming started via button");
+}
+
+static void on_pause_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (!g_app.is_streaming) { update_status("Not streaming!"); return; }
+    polling_timer_stop();
+    send_command("pause");
+    g_app.is_streaming = 0;
+    update_status("PAUSED");
+    update_button_states();
+    terminal_log("INFO: ","Paused via button");
+}
+
+static void on_stop_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+    if (!g_app.is_streaming) { update_status("Not streaming!"); return; }
+    polling_timer_stop();
+    send_command("stop");
+    g_app.is_streaming = 0;
+    update_status("Connected - Ready");
+    update_button_states();
+    terminal_log("INFO: ","Stopped via button");
+}
+
+/* ---- CHANGE 2/4: shutdown button callback ---- */
+/*
+ * Sends "shutdown" to the server, then cleans up the client state.
+ * A confirmation dialog is shown first to prevent accidental presses.
+ */
+static void on_shutdown_clicked(GtkButton *button, gpointer user_data) {
+    (void)button; (void)user_data;
+
+    if (!g_app.is_connected) {
+        terminal_log("ERROR: ","Not connected — cannot send shutdown");
+        return;
+    }
+
+    /* ---- Confirmation dialog ---- */
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(g_app.window),
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_WARNING,
+        GTK_BUTTONS_YES_NO,
+        "Send SHUTDOWN to the server?\n\n"
+        "This will terminate the server process entirely.");
+    gtk_window_set_title(GTK_WINDOW(dialog), "Confirm Server Shutdown");
+
+    gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+
+    if (response != GTK_RESPONSE_YES) {
+        terminal_log("INFO: ","Shutdown cancelled by user");
+        return;
+    }
+
+    /* ---- Execute shutdown ---- */
+    polling_timer_stop();
+    terminal_log("INFO: ","Sending shutdown command to server...");
+    send_command("shutdown");
+
+    g_app.is_connected  = 0;
+    g_app.is_streaming  = 0;
+    g_app.net_connected = 0;
+    update_status("Server shutdown requested");
+    update_button_states();
+    terminal_log("OK: ","Server shutdown sent. Connection closed.");
+}
+
+static void on_time_range_changed(GtkRange *range, gpointer user_data) {
+    (void)user_data;
+    int val = (int)gtk_range_get_value(range);
+    g_app.time_range_seconds = val;
+    char tmp[16];
+    snprintf(tmp, sizeof(tmp), "%d sec", val);
+    gtk_label_set_text(GTK_LABEL(g_app.time_label_value), tmp);
+    gtk_widget_queue_draw(g_app.drawing_area);
+}
+
+static void on_sensor_toggled(GtkToggleButton *toggle, gpointer user_data) {
+    int sid = GPOINTER_TO_INT(user_data);
+    g_app.sensor_enabled[sid] = gtk_toggle_button_get_active(toggle);
+    gtk_widget_queue_draw(g_app.drawing_area);
+}
+
+static void on_window_destroy(GtkWidget *w, gpointer user_data) {
+    (void)w; (void)user_data;
+    polling_timer_stop();
+    g_app.net_running   = 0;
+    g_app.is_connected  = 0;
+    g_app.net_connected = 0;
+    g_app.should_close  = 1;
+    if (g_app.sockfd >= 0) { close(g_app.sockfd); g_app.sockfd = -1; }
+    if (g_app.net_thread) pthread_detach(g_app.net_thread);
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid)
+        pthread_mutex_destroy(&g_app.buf[sid].lock);
+    gtk_main_quit();
+}
+
+/* ============ UI SETUP ============ */
+static void build_ui(void) {
+    memset(&g_app, 0, sizeof(g_app));
+    g_app.sockfd             = -1;
+    g_app.time_range_seconds = 5;
+    g_app.poll_interval_ms   = DEFAULT_POLL_INTERVAL_MS;
+    g_app.polling_timer_id   = 0;
+
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        buffer_init(sid);
+        g_app.sampling_rate[sid]  = 100;
+        g_app.sensor_enabled[sid] = 1;
+    }
+
+    g_app.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(g_app.window),
+        "MNG Sensor Client - GTK3 Real-Time Visualization");
+    gtk_window_set_default_size(GTK_WINDOW(g_app.window), 1400, 980);
+    g_signal_connect(g_app.window, "destroy", G_CALLBACK(on_window_destroy), NULL);
+
+    GtkWidget *root_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add(GTK_CONTAINER(g_app.window), root_vbox);
+
+    GtkWidget *main_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_container_set_border_width(GTK_CONTAINER(main_hbox), 8);
+    gtk_box_pack_start(GTK_BOX(root_vbox), main_hbox, TRUE, TRUE, 0);
+
+    /* LEFT: chart + stats */
+    GtkWidget *left_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_box_pack_start(GTK_BOX(main_hbox), left_vbox, TRUE, TRUE, 0);
+
+    g_app.drawing_area = gtk_drawing_area_new();
+    gtk_widget_set_size_request(g_app.drawing_area, 900, 500);
+    g_signal_connect(g_app.drawing_area, "draw", G_CALLBACK(on_draw_chart), NULL);
+    gtk_box_pack_start(GTK_BOX(left_vbox), g_app.drawing_area, TRUE, TRUE, 0);
+
+    GtkWidget *stats_frame = gtk_frame_new("Statistics");
+    gtk_box_pack_start(GTK_BOX(left_vbox), stats_frame, FALSE, FALSE, 0);
+    GtkWidget *stats_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(stats_scroll),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(stats_scroll, -1, 100);
+    gtk_container_add(GTK_CONTAINER(stats_frame), stats_scroll);
+    g_app.stats_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_container_set_border_width(GTK_CONTAINER(g_app.stats_box), 5);
+    gtk_container_add(GTK_CONTAINER(stats_scroll), g_app.stats_box);
+
+    /* RIGHT: scrollable control panel */
+    GtkWidget *right_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_size_request(right_vbox, 340, -1);
+    GtkWidget *right_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(right_scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(right_scroll), right_vbox);
+    gtk_box_pack_start(GTK_BOX(main_hbox), right_scroll, FALSE, TRUE, 0);
+
+    /* -- Connection Settings -- */
+    GtkWidget *conn_frame = gtk_frame_new("Connection Settings");
+    gtk_box_pack_start(GTK_BOX(right_vbox), conn_frame, FALSE, FALSE, 0);
+    GtkWidget *conn_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(conn_box), 8);
+    gtk_container_add(GTK_CONTAINER(conn_frame), conn_box);
+
+    GtkWidget *ip_lbl = gtk_label_new("Server IP:");
+    gtk_label_set_xalign(GTK_LABEL(ip_lbl), 0.0);
+    gtk_box_pack_start(GTK_BOX(conn_box), ip_lbl, FALSE, FALSE, 0);
+    g_app.ip_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(g_app.ip_entry), "127.0.0.1");
+    gtk_box_pack_start(GTK_BOX(conn_box), g_app.ip_entry, FALSE, FALSE, 0);
+
+    GtkWidget *port_lbl = gtk_label_new("Port:");
+    gtk_label_set_xalign(GTK_LABEL(port_lbl), 0.0);
+    gtk_box_pack_start(GTK_BOX(conn_box), port_lbl, FALSE, FALSE, 0);
+    g_app.port_entry = gtk_entry_new();
+    char portbuf[16];
+    snprintf(portbuf, sizeof(portbuf), "%d", SERVER_PORT);
+    gtk_entry_set_text(GTK_ENTRY(g_app.port_entry), portbuf);
+    gtk_box_pack_start(GTK_BOX(conn_box), g_app.port_entry, FALSE, FALSE, 0);
+
+    GtkWidget *conn_btn_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(conn_box), conn_btn_row, FALSE, FALSE, 0);
+    g_app.connect_btn = gtk_button_new_with_label("CONNECT");
+    g_signal_connect(g_app.connect_btn, "clicked", G_CALLBACK(on_connect_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(conn_btn_row), g_app.connect_btn, TRUE, TRUE, 0);
+    g_app.disconnect_btn = gtk_button_new_with_label("DISCONNECT");
+    g_signal_connect(g_app.disconnect_btn, "clicked", G_CALLBACK(on_disconnect_clicked), NULL);
+    gtk_widget_set_sensitive(g_app.disconnect_btn, FALSE);
+    gtk_box_pack_start(GTK_BOX(conn_btn_row), g_app.disconnect_btn, TRUE, TRUE, 0);
+
+    g_app.status_label = gtk_label_new("Disconnected");
+    gtk_label_set_xalign(GTK_LABEL(g_app.status_label), 0.0);
+    gtk_label_set_line_wrap(GTK_LABEL(g_app.status_label), TRUE);
+    gtk_box_pack_start(GTK_BOX(conn_box), g_app.status_label, FALSE, FALSE, 0);
+
+    /* -- Sampling Rates -- */
+    GtkWidget *rate_frame = gtk_frame_new("Sampling Rates (Hz)");
+    gtk_box_pack_start(GTK_BOX(right_vbox), rate_frame, FALSE, FALSE, 0);
+    GtkWidget *rate_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_container_set_border_width(GTK_CONTAINER(rate_box), 8);
+    gtk_container_add(GTK_CONTAINER(rate_frame), rate_box);
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        GtkWidget *rh = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+        gtk_box_pack_start(GTK_BOX(rate_box), rh, FALSE, FALSE, 0);
+        GtkWidget *lab = gtk_label_new(g_sensors[sid].name);
+        gtk_widget_set_size_request(lab, 130, -1);
+        gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
+        gtk_box_pack_start(GTK_BOX(rh), lab, FALSE, FALSE, 0);
+        GtkAdjustment *adj = gtk_adjustment_new(100, 1, 10000, 10, 100, 0);
+        GtkWidget *spin = gtk_spin_button_new(adj, 1.0, 0);
+        gtk_widget_set_size_request(spin, 70, -1);
+        gtk_box_pack_start(GTK_BOX(rh), spin, FALSE, FALSE, 0);
+        g_app.rate_spin[sid] = spin;
+    }
+    g_app.configure_btn = gtk_button_new_with_label("CONFIGURE");
+    g_signal_connect(g_app.configure_btn, "clicked", G_CALLBACK(on_configure_clicked), NULL);
+    gtk_widget_set_sensitive(g_app.configure_btn, FALSE);
+    gtk_box_pack_start(GTK_BOX(rate_box), g_app.configure_btn, FALSE, FALSE, 0);
+
+    /* -- Streaming Control -- */
+    GtkWidget *stream_frame = gtk_frame_new("Streaming Control");
+    gtk_box_pack_start(GTK_BOX(right_vbox), stream_frame, FALSE, FALSE, 0);
+    GtkWidget *stream_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(stream_box), 8);
+    gtk_container_add(GTK_CONTAINER(stream_frame), stream_box);
+
+    g_app.start_btn = gtk_button_new_with_label("START");
+    g_signal_connect(g_app.start_btn, "clicked", G_CALLBACK(on_start_clicked), NULL);
+    gtk_widget_set_sensitive(g_app.start_btn, FALSE);
+    gtk_box_pack_start(GTK_BOX(stream_box), g_app.start_btn, FALSE, FALSE, 0);
+
+    g_app.pause_btn = gtk_button_new_with_label("PAUSE");
+    g_signal_connect(g_app.pause_btn, "clicked", G_CALLBACK(on_pause_clicked), NULL);
+    gtk_widget_set_sensitive(g_app.pause_btn, FALSE);
+    gtk_box_pack_start(GTK_BOX(stream_box), g_app.pause_btn, FALSE, FALSE, 0);
+
+    g_app.stop_btn = gtk_button_new_with_label("STOP");
+    g_signal_connect(g_app.stop_btn, "clicked", G_CALLBACK(on_stop_clicked), NULL);
+    gtk_widget_set_sensitive(g_app.stop_btn, FALSE);
+    gtk_box_pack_start(GTK_BOX(stream_box), g_app.stop_btn, FALSE, FALSE, 0);
+
+    /* ---- CHANGE 3/4: SHUTDOWN button — lives inside Streaming Control frame,
+     *      separated by a horizontal rule (GtkSeparator) to make it visually
+     *      distinct from START/PAUSE/STOP.                                    ---- */
+    GtkWidget *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_pack_start(GTK_BOX(stream_box), sep, FALSE, FALSE, 4);
+
+    g_app.shutdown_btn = gtk_button_new_with_label("SHUTDOWN SERVER");
+    gtk_widget_set_sensitive(g_app.shutdown_btn, FALSE);   /* disabled until connected */
+    g_signal_connect(g_app.shutdown_btn, "clicked",
+                     G_CALLBACK(on_shutdown_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(stream_box), g_app.shutdown_btn, FALSE, FALSE, 0);
+    /* ---- END CHANGE 3/4 ---- */
+
+    /* -- Poll Interval -- */
+    GtkWidget *poll_frame = gtk_frame_new("Poll Interval");
+    gtk_box_pack_start(GTK_BOX(right_vbox), poll_frame, FALSE, FALSE, 0);
+    GtkWidget *poll_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(poll_box), 8);
+    gtk_container_add(GTK_CONTAINER(poll_frame), poll_box);
+
+    GtkWidget *poll_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(poll_box), poll_row, FALSE, FALSE, 0);
+    GtkWidget *poll_lbl = gtk_label_new("Request every (ms):");
+    gtk_label_set_xalign(GTK_LABEL(poll_lbl), 0.0);
+    gtk_box_pack_start(GTK_BOX(poll_row), poll_lbl, TRUE, TRUE, 0);
+    GtkAdjustment *poll_adj =
+        gtk_adjustment_new(DEFAULT_POLL_INTERVAL_MS, 1, 5000, 1, 10, 0);
+    g_app.poll_spin = gtk_spin_button_new(poll_adj, 1.0, 0);
+    gtk_widget_set_size_request(g_app.poll_spin, 80, -1);
+    g_signal_connect(g_app.poll_spin, "value-changed",
+                     G_CALLBACK(on_poll_interval_changed), NULL);
+    gtk_box_pack_start(GTK_BOX(poll_row), g_app.poll_spin, FALSE, FALSE, 0);
+    GtkWidget *poll_hint = gtk_label_new(
+        "How often the client requests\n"
+        "a new batch from the server.\n"
+        "1 ms = fastest, matches sensor\n"
+        "sampling rate for best fidelity.");
+    gtk_label_set_xalign(GTK_LABEL(poll_hint), 0.0);
+    gtk_label_set_line_wrap(GTK_LABEL(poll_hint), TRUE);
+    gtk_box_pack_start(GTK_BOX(poll_box), poll_hint, FALSE, FALSE, 0);
+
+    /* -- Display Window -- */
+    GtkWidget *time_frame = gtk_frame_new("Display Window");
+    gtk_box_pack_start(GTK_BOX(right_vbox), time_frame, FALSE, FALSE, 0);
+    GtkWidget *time_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(time_box), 8);
+    gtk_container_add(GTK_CONTAINER(time_frame), time_box);
+    GtkWidget *tlrow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_box_pack_start(GTK_BOX(time_box), tlrow, FALSE, FALSE, 0);
+    GtkWidget *tl = gtk_label_new("Window (sec):");
+    gtk_label_set_xalign(GTK_LABEL(tl), 0.0);
+    gtk_box_pack_start(GTK_BOX(tlrow), tl, FALSE, FALSE, 0);
+    g_app.time_label_value = gtk_label_new("5 sec");
+    gtk_label_set_xalign(GTK_LABEL(g_app.time_label_value), 1.0);
+    gtk_box_pack_end(GTK_BOX(tlrow), g_app.time_label_value, FALSE, FALSE, 0);
+    GtkAdjustment *tadj = gtk_adjustment_new(5, 1, 60, 1, 5, 0);
+    g_app.time_scale = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, tadj);
+    gtk_scale_set_draw_value(GTK_SCALE(g_app.time_scale), FALSE);
+    gtk_scale_set_digits(GTK_SCALE(g_app.time_scale), 0);
+    g_signal_connect(g_app.time_scale, "value-changed",
+                     G_CALLBACK(on_time_range_changed), NULL);
+    gtk_box_pack_start(GTK_BOX(time_box), g_app.time_scale, FALSE, FALSE, 0);
+
+    /* -- Visible Sensors -- */
+    GtkWidget *sensor_frame = gtk_frame_new("Visible Sensors");
+    gtk_box_pack_start(GTK_BOX(right_vbox), sensor_frame, FALSE, FALSE, 0);
+    GtkWidget *sensor_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(sensor_box), 8);
+    gtk_container_add(GTK_CONTAINER(sensor_frame), sensor_box);
+    for (int sid = 1; sid <= MAX_SENSORS; ++sid) {
+        GtkWidget *check = gtk_check_button_new_with_label(g_sensors[sid].name);
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check), TRUE);
+        g_signal_connect(check, "toggled",
+                         G_CALLBACK(on_sensor_toggled), GINT_TO_POINTER(sid));
+        gtk_box_pack_start(GTK_BOX(sensor_box), check, FALSE, FALSE, 0);
+        g_app.sensor_check[sid] = check;
+    }
+
+    /* ---- BOTTOM: COMMAND TERMINAL ---- */
+    GtkWidget *term_frame = gtk_frame_new("Command Terminal");
+    gtk_box_pack_start(GTK_BOX(root_vbox), term_frame, FALSE, FALSE, 0);
+    GtkWidget *term_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_container_set_border_width(GTK_CONTAINER(term_vbox), 6);
+    gtk_container_add(GTK_CONTAINER(term_frame), term_vbox);
+
+    GtkWidget *log_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(log_scroll),
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(log_scroll, -1, 130);
+    gtk_box_pack_start(GTK_BOX(term_vbox), log_scroll, TRUE, TRUE, 0);
+
+    g_app.cmd_log_view   = gtk_text_view_new();
+    g_app.cmd_log_buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(g_app.cmd_log_view));
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(g_app.cmd_log_view), FALSE);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(g_app.cmd_log_view), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(g_app.cmd_log_view), GTK_WRAP_WORD_CHAR);
+
+    GtkCssProvider *css = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(css,
+        "textview { background-color: #0d1117; color: #c9d1d9;"
+        "           font-family: monospace; font-size: 11px; }", -1, NULL);
+    gtk_style_context_add_provider(
+        gtk_widget_get_style_context(g_app.cmd_log_view),
+        GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_USER);
+    g_object_unref(css);
+    gtk_container_add(GTK_CONTAINER(log_scroll), g_app.cmd_log_view);
+
+    GtkWidget *input_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_pack_start(GTK_BOX(term_vbox), input_hbox, FALSE, FALSE, 0);
+    GtkWidget *prompt = gtk_label_new("cmd>");
+    gtk_box_pack_start(GTK_BOX(input_hbox), prompt, FALSE, FALSE, 0);
+    g_app.cmd_entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(g_app.cmd_entry),
+        "start | stop | pause | poll <ms> | configure T A0 A1 SW PB"
+        " | disconnect | shutdown | help");
+    g_signal_connect(g_app.cmd_entry, "activate",
+                     G_CALLBACK(on_cmd_entry_activate), NULL);
+    gtk_box_pack_start(GTK_BOX(input_hbox), g_app.cmd_entry, TRUE, TRUE, 0);
+    GtkWidget *send_btn = gtk_button_new_with_label("Send");
+    g_signal_connect_swapped(send_btn, "clicked",
+                             G_CALLBACK(on_cmd_entry_activate), g_app.cmd_entry);
+    gtk_box_pack_start(GTK_BOX(input_hbox), send_btn, FALSE, FALSE, 0);
+
+    /* ---- CHANGE 4/4: startup log messages updated to mention shutdown ---- */
+    terminal_log("INFO: ","Command terminal ready. Type 'help' for commands.");
+    terminal_log("INFO: ","Poll interval default: 1 ms. Adjust with spin box or 'poll <ms>'.");
+    terminal_log("INFO: ","Use 'shutdown' command or SHUTDOWN SERVER button to stop the server.");
+
+    update_button_states();
+    gtk_widget_show_all(g_app.window);
+}
+
+/* ============ MAIN ============ */
+int main(int argc, char *argv[]) {
+    gtk_init(&argc, &argv);
+    build_ui();
+    g_timeout_add(UPDATE_INTERVAL_MS, ui_update_cb, NULL);
+    gtk_main();
+    return 0;
+}
+
+
+\end{minted}

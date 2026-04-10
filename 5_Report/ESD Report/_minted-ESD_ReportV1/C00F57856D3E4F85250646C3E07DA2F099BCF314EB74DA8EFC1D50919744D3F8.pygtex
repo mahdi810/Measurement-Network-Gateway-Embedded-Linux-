@@ -1,0 +1,5 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k}{when}\PYG{+w}{ }\PYG{l+m+mb}{b\PYGZdq{}101\PYGZdq{}}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
+\PYG{+w}{	    }\PYG{n}{reg\PYGZus{}data\PYGZus{}out}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{ADC\PYGZus{}Data}\PYG{p}{;}
+
+\end{Verbatim}

@@ -1,0 +1,48 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}graph\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sensor1\PYGZus{}index}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}combo\PYGZus{}box\PYGZus{}get\PYGZus{}active}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}COMBO\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{combo\PYGZus{}sensor1}\PYG{p}{));}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sensor2\PYGZus{}index}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}combo\PYGZus{}box\PYGZus{}get\PYGZus{}active}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}COMBO\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{combo\PYGZus{}sensor2}\PYG{p}{));}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sensor1\PYGZus{}index}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sensor2\PYGZus{}index}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}graph\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Select two sensors!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sensor1\PYGZus{}index}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{sensor2\PYGZus{}index}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}graph\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Select TWO DIFFERENT sensors!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor1\PYGZus{}index}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sensor2}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor2\PYGZus{}index}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sensor1}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}TEMP}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sensor1}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}ADC1}\PYG{+w}{ }\PYG{o}{||}
+\PYG{+w}{        }\PYG{n}{sensor2}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}TEMP}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sensor2}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}ADC1}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}graph\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Only Temperature, ADC0, ADC1 can be graphed!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor2}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor2}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}mutex}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{min\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{UINT32\PYGZus{}MAX}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{].}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{].}\PYG{n}{min\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{UINT32\PYGZus{}MAX}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{].}\PYG{n}{max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}mutex}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{status\PYGZus{}msg}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{status\PYGZus{}msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{status\PYGZus{}msg}\PYG{p}{),}
+\PYG{+w}{             }\PYG{l+s}{\PYGZdq{}Plotting \PYGZpc{}s (red) vs \PYGZpc{}s (blue)...\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{             }\PYG{n}{sensor\PYGZus{}names}\PYG{p}{[}\PYG{n}{sensor1}\PYG{p}{],}
+\PYG{+w}{             }\PYG{n}{sensor\PYGZus{}names}\PYG{p}{[}\PYG{n}{sensor2}\PYG{p}{]);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}graph\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{status\PYGZus{}msg}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Graph: \PYGZpc{}s vs \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}names}\PYG{p}{[}\PYG{n}{sensor1}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}names}\PYG{p}{[}\PYG{n}{sensor2}\PYG{p}{]);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

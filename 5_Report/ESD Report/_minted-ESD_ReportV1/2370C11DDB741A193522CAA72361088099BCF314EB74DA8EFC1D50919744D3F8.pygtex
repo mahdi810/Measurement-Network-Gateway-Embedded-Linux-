@@ -1,0 +1,15 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{p}{.}
+\PYG{+w}{	}\PYG{p}{.}
+\PYG{+w}{	}\PYG{p}{.}
+\PYG{+w}{	}\PYG{k}{variable}\PYG{+w}{ }\PYG{n}{loc\PYGZus{}addr}\PYG{+w}{ }\PYG{o}{:}\PYG{k+kt}{std\PYGZus{}logic\PYGZus{}vector}\PYG{p}{(}\PYG{n}{OPT\PYGZus{}MEM\PYGZus{}ADDR\PYGZus{}BITS}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{	}\PYG{k}{begin}
+\PYG{+w}{	    }\PYG{c+c1}{\PYGZhy{}\PYGZhy{} Address decoding for reading registers}
+\PYG{+w}{	    }\PYG{n}{loc\PYGZus{}addr}\PYG{+w}{ }\PYG{o}{:=}\PYG{+w}{ }\PYG{n}{axi\PYGZus{}araddr}\PYG{p}{(}\PYG{n}{ADDR\PYGZus{}LSB}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{OPT\PYGZus{}MEM\PYGZus{}ADDR\PYGZus{}BITS}\PYG{+w}{ }\PYG{k}{downto}\PYG{+w}{ }\PYG{n}{ADDR\PYGZus{}LSB}\PYG{p}{);}
+\PYG{+w}{	    }\PYG{k}{case}\PYG{+w}{ }\PYG{n}{loc\PYGZus{}addr}\PYG{+w}{ }\PYG{k}{is}
+\PYG{+w}{	      }\PYG{k}{when}\PYG{+w}{ }\PYG{l+m+mb}{b\PYGZdq{}000\PYGZdq{}}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
+\PYG{+w}{	        }\PYG{n}{reg\PYGZus{}data\PYGZus{}out}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mh}{x\PYGZdq{}0000\PYGZdq{}}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}000\PYGZdq{}}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{n}{uzPushB}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{n}{uzSwitch}\PYG{p}{;}
+\PYG{+w}{	        }\PYG{p}{.}
+\PYG{+w}{	        }\PYG{p}{.}
+\PYG{+w}{	        }\PYG{p}{.}
+\end{Verbatim}

@@ -1,0 +1,47 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}set\PYGZus{}temp\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{connected}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Not connected!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{Clnt\PYGZus{}Send\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{sendCmd}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}cfg}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{p}{)}\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}get\PYGZus{}value}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SPIN\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{spin\PYGZus{}temp\PYGZus{}cfg}\PYG{p}{));}
+
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{p}{(}\PYG{n}{temp\PYGZus{}cfg}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    	}\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{cmd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{MNG\PYGZus{}CMD\PYGZus{}DORMANT\PYGZus{}TEM}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{k}{else}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{((}\PYG{l+m+mi}{1000}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}cfg}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}
+\PYG{+w}{                               }\PYG{l+s}{\PYGZdq{}Invalid TEMP frequency: must divide 1000 Hz\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{cmd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{MNG\PYGZus{}CMD\PYGZus{}SET\PYGZus{}FREQ}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{MNG\PYGZus{}CMD\PYGZus{}SET\PYGZus{}FREQ\PYGZus{}TMP}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sendCmd}\PYG{p}{.}\PYG{n}{param}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}cfg}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{send}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{+w}{ }\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{sendCmd}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{Clnt\PYGZus{}Send\PYGZus{}struct}\PYG{p}{),}\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}[GUI] Error sending configure command\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Error sending configure command!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{status\PYGZus{}msg}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{status\PYGZus{}msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{status\PYGZus{}msg}\PYG{p}{),}
+\PYG{+w}{             }\PYG{l+s}{\PYGZdq{}Configure sent: Temp=\PYGZpc{}d Hz \PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{			 }\PYG{n}{temp\PYGZus{}cfg}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{status\PYGZus{}msg}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

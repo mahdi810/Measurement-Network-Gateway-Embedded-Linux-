@@ -1,0 +1,8 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{case}\PYG{+w}{ }\PYG{n+no}{sw\PYGZus{}sid}\PYG{p}{:}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{system\PYGZus{}mode}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{MODE\PYGZus{}SIM}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{sample}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}value}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{backend\PYGZus{}read\PYGZus{}switches}\PYG{p}{();}
+\PYG{+w}{    }\PYG{k}{else}
+\PYG{+w}{        }\PYG{n}{sample}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}value}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{readZedSwitches}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{break}\PYG{p}{;}
+\end{Verbatim}

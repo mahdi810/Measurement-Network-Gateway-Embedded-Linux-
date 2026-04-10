@@ -1,0 +1,6 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{now}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{next\PYGZus{}deadline}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{c+cm}{/* acquire sensor and create sample */}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

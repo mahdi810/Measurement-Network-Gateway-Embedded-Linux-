@@ -1,0 +1,32 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}sensor1\PYGZus{}changed}\PYG{p}{(}\PYG{n}{GtkComboBox}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{combo}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{idx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}combo\PYGZus{}box\PYGZus{}get\PYGZus{}active}\PYG{p}{(}\PYG{n}{combo}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{switch}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{idx}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{		}\PYG{k}{case}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{:}
+\PYG{+w}{			}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}NONE}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{case}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{:}
+\PYG{+w}{			}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}TEMP}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{case}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{:}
+\PYG{+w}{			}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}ADC0}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{case}\PYG{+w}{ }\PYG{l+m+mi}{3}\PYG{p}{:}
+\PYG{+w}{			}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{current\PYGZus{}sensor1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{SENSOR\PYGZus{}ADC1}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{default}\PYG{o}{:}
+\PYG{+w}{			}\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{memset}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{points}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{points}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{graph\PYGZus{}data}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{].}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}graph\PYGZus{}status}\PYG{p}{),}
+\PYG{+w}{                       }\PYG{l+s}{\PYGZdq{}Sensor 1 updated\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

@@ -1,0 +1,83 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} On\PYGZhy{}board leds            \PYGZsh{}}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} all 8 leds}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }T22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{0}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }T21\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{1}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }U22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{2}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }U21\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{3}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }V22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{4}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }W22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{5}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }U19\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{6}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }U14\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{[}\PYG{n+nv}{7}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zLED\PYG{k}{]}
+
+\PYG{c}{\PYGZsh{} zSwitch [7:0]}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} On\PYGZhy{}board switches        \PYGZsh{}}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }F22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{0}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }G22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{1}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }H22\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{2}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }F21\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{3}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }H19\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{4}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }H18\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{5}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }H17\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{6}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }M15\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{[}\PYG{n+nv}{7}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS18\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zSwitch\PYG{k}{]}
+
+\PYG{c}{\PYGZsh{} zPushB [4:0]}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} On\PYGZhy{}board pushbuttons     \PYGZsh{}}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }P16\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{[}\PYG{n+nv}{0}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }R16\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{[}\PYG{n+nv}{1}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }N15\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{[}\PYG{n+nv}{2}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }R18\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{[}\PYG{n+nv}{3}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }T18\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{[}\PYG{n+nv}{4}\PYG{k}{]]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS18\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }zPushB\PYG{k}{]}
+
+
+\PYG{c}{\PYGZsh{} PMOD JA}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} PmodAD1                 \PYGZsh{}}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{}NET JA1         LOC = Y11   | IOSTANDARD=LVCMOS33;}
+\PYG{c}{\PYGZsh{}NET JA2         LOC = AA11  | IOSTANDARD=LVCMOS33;}
+\PYG{c}{\PYGZsh{}NET JA3         LOC = Y10   | IOSTANDARD=LVCMOS33;}
+\PYG{c}{\PYGZsh{}NET JA4         LOC = AA9   | IOSTANDARD=LVCMOS33;}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }Y11\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }AD1csq\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }AD1csq\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }AA9\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }AD1Sclk\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }AD1Sclk\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }Y10\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }sdiAD\PYGZus{}1\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }sdiAD\PYGZus{}1\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }AA11\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }sdiAD\PYGZus{}0\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }sdiAD\PYGZus{}0\PYG{k}{]}
+
+
+\PYG{c}{\PYGZsh{} PMOD JC1}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{} MAXPMB1\PYGZsh{}                 \PYGZsh{}}
+\PYG{c}{\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}\PYGZsh{}}
+\PYG{c}{\PYGZsh{}NET JC1\PYGZus{}N         LOC = AB6  | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC1\PYGZus{}N\PYGZdq{} \PYGZhy{} 2}
+\PYG{c}{\PYGZsh{}NET JC1\PYGZus{}P         LOC = AB7  | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC1\PYGZus{}P\PYGZdq{} \PYGZhy{} 1}
+\PYG{c}{\PYGZsh{}NET JC2\PYGZus{}N         LOC = AA4  | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC2\PYGZus{}N\PYGZdq{} \PYGZhy{} 4}
+\PYG{c}{\PYGZsh{}NET JC2\PYGZus{}P         LOC = Y4   | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC2\PYGZus{}P\PYGZdq{} \PYGZhy{} 3}
+\PYG{c}{\PYGZsh{}NET JC3\PYGZus{}N         LOC = T6   | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC3\PYGZus{}N\PYGZdq{} \PYGZhy{} 8}
+\PYG{c}{\PYGZsh{}NET JC3\PYGZus{}P         LOC = R6   | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC3\PYGZus{}P\PYGZdq{} \PYGZhy{} 7}
+\PYG{c}{\PYGZsh{}NET JC4\PYGZus{}N         LOC = U4   | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC4\PYGZus{}N\PYGZdq{} \PYGZhy{}10}
+\PYG{c}{\PYGZsh{}NET JC4\PYGZus{}P         LOC = T4   | IOSTANDARD=LVCMOS33;  \PYGZsh{} \PYGZdq{}JC4\PYGZus{}P\PYGZdq{} \PYGZhy{} 9}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }AB7\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mCSn\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mCSn\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }AB6\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mMOSI\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mMOSI\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }Y4\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mMISO\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mMISO\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }AA4\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mSCLK\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mSCLK\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }PACKAGE\PYGZus{}PIN\PYG{+w}{ }R6\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mDRDYn\PYG{k}{]}
+\PYG{n+nv}{set\PYGZus{}property}\PYG{+w}{ }IOSTANDARD\PYG{+w}{ }LVCMOS33\PYG{+w}{ }\PYG{k}{[}\PYG{n+nv}{get\PYGZus{}ports}\PYG{+w}{ }mDRDYn\PYG{k}{]}
+
+\end{Verbatim}

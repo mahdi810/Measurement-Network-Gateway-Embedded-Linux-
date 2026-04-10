@@ -1,0 +1,11 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}time\PYGZus{}range\PYGZus{}changed}\PYG{p}{(}\PYG{n}{GtkRange}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{range}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{p}{)}\PYG{n}{gtk\PYGZus{}range\PYGZus{}get\PYGZus{}value}\PYG{p}{(}\PYG{n}{range}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}range\PYGZus{}seconds}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{val}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{tmp}\PYG{p}{[}\PYG{l+m+mi}{16}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{tmp}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{tmp}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}d sec\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{val}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{tmp}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

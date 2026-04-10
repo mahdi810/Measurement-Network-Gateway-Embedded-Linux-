@@ -1,0 +1,10 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{// When user unchecks Temperature checkbox}
+\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}set\PYGZus{}active}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TOGGLE\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{checkboxes}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+
+\PYG{c+c1}{// Application updates dropdown}
+\PYG{n}{update\PYGZus{}dropdown}\PYG{p}{();}
+
+\PYG{c+c1}{// Graph redraws without Temperature trace}
+\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{graph\PYGZus{}area}\PYG{p}{);}
+\end{Verbatim}

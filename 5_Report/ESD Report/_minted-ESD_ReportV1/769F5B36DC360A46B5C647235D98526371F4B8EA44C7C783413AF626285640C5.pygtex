@@ -1,0 +1,9 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{c+cm}{/* Clean up client socket if not already closed */}
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{	}\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{		}\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{p}{);}
+\PYG{+w}{		}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
+\PYG{+w}{	}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\end{Verbatim}

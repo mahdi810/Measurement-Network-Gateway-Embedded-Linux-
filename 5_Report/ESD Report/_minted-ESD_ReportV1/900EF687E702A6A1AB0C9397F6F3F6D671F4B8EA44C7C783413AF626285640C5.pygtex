@@ -1,0 +1,599 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdio.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}unistd.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}fcntl.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}string.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}pthread.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}arpa/inet.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdlib.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdint.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}time.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}math.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}errno.h\PYGZgt{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}sys/socket.h\PYGZgt{}}
+
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZdq{}Ring\PYGZus{}Buffer.h\PYGZdq{}}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZdq{}sensor\PYGZus{}read.h\PYGZdq{}}
+
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}define PORT         50012}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}define CMD\PYGZus{}BUF\PYGZus{}SIZE 1024}
+\PYG{+w}{    }\PYG{c+cp}{\PYGZsh{}define PI           3.14159265358979323846}
+
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{simulation}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * GLOBAL SHUTDOWN FLAG + SOCKET FDS}
+\PYG{c+cm}{     * Used by request\PYGZus{}shutdown() to wake up all blocked calls and}
+\PYG{c+cm}{     * signal every thread to exit cleanly.}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{  }\PYG{n}{g\PYGZus{}shutdown}\PYG{+w}{      }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{  }\PYG{c+cm}{/* set to 1 to begin shutdown     */}
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{           }\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}\PYG{+w}{ }\PYG{c+cm}{/* listening socket fd            */}
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{           }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}\PYG{+w}{ }\PYG{c+cm}{/* currently connected client fd  */}
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PTHREAD\PYGZus{}MUTEX\PYGZus{}INITIALIZER}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+cm}{/*}
+\PYG{c+cm}{     * Called from any thread to trigger a full program shutdown.}
+\PYG{c+cm}{     * Closes both sockets so that blocked accept() / recv() / send()}
+\PYG{c+cm}{     * return immediately, allowing both threads to notice g\PYGZus{}shutdown == 1}
+\PYG{c+cm}{     * and return.}
+\PYG{c+cm}{     */}
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{request\PYGZus{}shutdown}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}shutdown}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{  }\PYG{c+cm}{/* visible to both threads before sockets are closed */}
+
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{shutdown}\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SHUT\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{shutdown}\PYG{p}{(}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SHUT\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * FAKE SENSOR DATA (simulation mode)}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{   }\PYG{n}{temp\PYGZus{}base}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{   }\PYG{n}{adc0\PYGZus{}base}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{   }\PYG{n}{adc1\PYGZus{}base}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{startup\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{FakeSensorState}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{static}\PYG{+w}{ }\PYG{n}{FakeSensorState}\PYG{+w}{ }\PYG{n}{fake\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{temp\PYGZus{}base}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{25}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{adc0\PYGZus{}base}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{325}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{adc1\PYGZus{}base}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{545}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{startup\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{};}
+
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n+nf}{GenerateFakeTemperature}\PYG{p}{(}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{fake\PYGZus{}state}\PYG{p}{.}\PYG{n}{temp\PYGZus{}base}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n+nf}{GenerateFakeADC0}\PYG{p}{(}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{1e6}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{)(}\PYG{n}{fake\PYGZus{}state}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}base}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mf}{100.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{sin}\PYG{p}{(}\PYG{l+m+mf}{2.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{PI}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mi}{3}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{t}\PYG{p}{));}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n+nf}{GenerateFakeADC1}\PYG{p}{(}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{1e6}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{)(}\PYG{n}{fake\PYGZus{}state}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}base}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mf}{150.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{cos}\PYG{p}{(}\PYG{l+m+mf}{2.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{PI}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{t}\PYG{p}{));}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n+nf}{GenerateFakeSwitch}\PYG{p}{(}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{last\PYGZus{}change}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{  }\PYG{n}{state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mh}{0x0F}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{elapsed\PYGZus{}us}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{last\PYGZus{}change}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{5000000ULL}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{state}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mh}{0x0F}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{l+m+mh}{0x00}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{l+m+mh}{0x0F}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{last\PYGZus{}change}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{elapsed\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{state}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n+nf}{GenerateFakePushButton}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * THREAD STRUCTURES \PYGZam{} GLOBALS}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{adc0\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{adc1\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{switch\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{pushb\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{config\PYGZus{}struct}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}t}\PYG{+w}{       }\PYG{n}{thobj}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}cond\PYGZus{}t}\PYG{+w}{  }\PYG{n}{thcond}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{thmutex}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{config\PYGZus{}struct}\PYG{+w}{   }\PYG{n}{th\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{short}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{       }\PYG{n}{thkill}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{thread\PYGZus{}struct}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{enum}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{sid\PYGZus{}temp}\PYG{+w}{     }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sid\PYGZus{}adc0}\PYG{+w}{     }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sid\PYGZus{}adc1}\PYG{+w}{     }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{3}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sid\PYGZus{}switches}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{4}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{sid\PYGZus{}pushb}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{5}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}id}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{sid}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{svalue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{packet}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{enum}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{STOPPED}\PYG{+w}{       }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{RUNNING}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{PAUSED}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{CONFIGURATION}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{DISCONNECT}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{SHUTDOWN}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}state\PYGZus{}t}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}state\PYGZus{}t}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}state}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{thread\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{thread\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{server\PYGZus{}thread}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{config\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}\PYG{p}{,}
+\PYG{+w}{        }\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{300}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{};}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * SENSOR THREAD}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n+nf}{sensor\PYGZus{}thread\PYGZus{}function}\PYG{p}{(}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{arg}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{arg}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{TempInitializerFlag}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sensor thread started...}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{open}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}/dev/meascdd\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{O\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{fd}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{simulation}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Device open failed — simulation mode}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Device opened successfully}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{n}{InitTimer}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{InitRingBuffer}\PYG{p}{();}
+
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{TempInit}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Temperature sensor init failed}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Temperature sensor initialized}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{TempInitializerFlag}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{adc0\PYGZus{}data}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{adc1\PYGZus{}data}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{dummy0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{dummy1}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{next\PYGZus{}temp\PYGZus{}time}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc0\PYGZus{}time}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc1\PYGZus{}time}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{next\PYGZus{}switch\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{next\PYGZus{}pushb\PYGZus{}time}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{period\PYGZus{}temp\PYGZus{}us}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{period\PYGZus{}adc0\PYGZus{}us}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{period\PYGZus{}adc1\PYGZus{}us}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{period\PYGZus{}switch\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{period\PYGZus{}pushb\PYGZus{}us}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t\PYGZus{}adc0}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{,}\PYG{+w}{  }\PYG{n}{t\PYGZus{}adc1}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{freq\PYGZus{}adc0}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{5.0}\PYG{p}{,}\PYG{+w}{  }\PYG{n}{freq\PYGZus{}adc1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{3.0}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Periods (us): T=\PYGZpc{}llu A0=\PYGZpc{}llu A1=\PYGZpc{}llu SW=\PYGZpc{}llu PB=\PYGZpc{}llu}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{               }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{p}{)}\PYG{n}{period\PYGZus{}temp\PYGZus{}us}\PYG{p}{,}
+\PYG{+w}{               }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{p}{)}\PYG{n}{period\PYGZus{}adc0\PYGZus{}us}\PYG{p}{,}
+\PYG{+w}{               }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{p}{)}\PYG{n}{period\PYGZus{}adc1\PYGZus{}us}\PYG{p}{,}
+\PYG{+w}{               }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{p}{)}\PYG{n}{period\PYGZus{}switch\PYGZus{}us}\PYG{p}{,}
+\PYG{+w}{               }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{+w}{ }\PYG{k+kt}{long}\PYG{p}{)}\PYG{n}{period\PYGZus{}pushb\PYGZus{}us}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{p}{)}
+\PYG{+w}{        }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{c+cm}{/* Check both thkill AND global shutdown */}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{kill}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thkill}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{kill}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}
+
+\PYG{+w}{            }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+
+\PYG{+w}{            }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}temp\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{next\PYGZus{}adc0\PYGZus{}time}\PYG{+w}{   }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc0\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{next\PYGZus{}adc1\PYGZus{}time}\PYG{+w}{   }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc1\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{next\PYGZus{}switch\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}switch\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{next\PYGZus{}pushb\PYGZus{}time}\PYG{+w}{  }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}pushb\PYGZus{}time}\PYG{p}{;}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{                }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sleep\PYGZus{}us}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{chunk}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sleep\PYGZus{}us}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{n}{usleep}\PYG{p}{(}\PYG{n}{chunk}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{n}{sleep\PYGZus{}us}\PYG{+w}{    }\PYG{o}{\PYGZhy{}=}\PYG{+w}{ }\PYG{n}{chunk}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GetElapsedTime}\PYG{p}{();}
+\PYG{+w}{                    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{sleep\PYGZus{}target}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{c+cm}{/* Exit sleep early if shutdown requested */}
+\PYG{+w}{                    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{goto}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}exit}\PYG{p}{;}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}temp\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{simulation}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{temp\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{)(}\PYG{n}{GenerateFakeTemperature}\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{);}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{temp\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{TempRead3}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{);}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{n}{PushRB}\PYG{p}{(}\PYG{n}{sid\PYGZus{}temp}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{next\PYGZus{}temp\PYGZus{}time}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{period\PYGZus{}temp\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}T=\PYGZpc{}u \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{temp\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc0\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{simulation}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{t\PYGZus{}adc0}\PYG{+w}{   }\PYG{o}{+=}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{n}{adc0\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{)(}\PYG{n}{fake\PYGZus{}state}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}base}\PYG{+w}{ }\PYG{o}{+}
+\PYG{+w}{                                }\PYG{l+m+mf}{100.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{sin}\PYG{p}{(}\PYG{l+m+mf}{2.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{PI}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{freq\PYGZus{}adc0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{t\PYGZus{}adc0}\PYG{p}{));}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{GetADC}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{adc0\PYGZus{}data}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{dummy0}\PYG{p}{);}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{n}{PushRB}\PYG{p}{(}\PYG{n}{sid\PYGZus{}adc0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{adc0\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{next\PYGZus{}adc0\PYGZus{}time}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{period\PYGZus{}adc0\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}A0=\PYGZpc{}u \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{adc0\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}adc1\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{simulation}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{t\PYGZus{}adc1}\PYG{+w}{   }\PYG{o}{+=}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{n}{adc1\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{)(}\PYG{n}{fake\PYGZus{}state}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}base}\PYG{+w}{ }\PYG{o}{+}
+\PYG{+w}{                                }\PYG{l+m+mf}{150.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{cos}\PYG{p}{(}\PYG{l+m+mf}{2.0}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{PI}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{freq\PYGZus{}adc1}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{t\PYGZus{}adc1}\PYG{p}{));}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{GetADC}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{dummy1}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{adc1\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{n}{PushRB}\PYG{p}{(}\PYG{n}{sid\PYGZus{}adc1}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{adc1\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{next\PYGZus{}adc1\PYGZus{}time}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{period\PYGZus{}adc1\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}A1=\PYGZpc{}u \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{adc1\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}switch\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sw}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{simulation}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{GenerateFakeSwitch}\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{p}{)}
+\PYG{+w}{                                        }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{ReadSwitch}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{PushRB}\PYG{p}{(}\PYG{n}{sid\PYGZus{}switches}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sw}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{next\PYGZus{}switch\PYGZus{}time}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{period\PYGZus{}switch\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}SW=\PYGZpc{}u \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sw}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{next\PYGZus{}pushb\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n}{pb}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{simulation}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{GenerateFakePushButton}\PYG{p}{()}
+\PYG{+w}{                                        }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{ReadButton}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{PushRB}\PYG{p}{(}\PYG{n}{sid\PYGZus{}pushb}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{pb}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{next\PYGZus{}pushb\PYGZus{}time}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{period\PYGZus{}pushb\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}PB=\PYGZpc{}u \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{pb}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n+nl}{sensor\PYGZus{}exit}\PYG{p}{:}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{fd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{TempInitializerFlag}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sensor thread exiting}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * HELPERS}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{set\PYGZus{}config}\PYG{p}{(}\PYG{n}{config\PYGZus{}struct}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{config}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{config}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{temp\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{config}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{adc0\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{config}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{adc1\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{config}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{switch\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{config}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{pushb\PYGZus{}config}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{print\PYGZus{}config}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}temp\PYGZus{}config:     \PYGZpc{}u}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}adc0\PYGZus{}config:     \PYGZpc{}u}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}adc1\PYGZus{}config:     \PYGZpc{}u}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}switches\PYGZus{}config: \PYGZpc{}u}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}pushb\PYGZus{}config:    \PYGZpc{}u}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{main\PYGZus{}config}\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * SERVER THREAD}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n+nf}{server\PYGZus{}thread\PYGZus{}function}\PYG{p}{(}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{arg}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{arg}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{packet}\PYG{+w}{ }\PYG{n}{payload}\PYG{p}{[}\PYG{l+m+mi}{96}\PYG{p}{];}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{   }\PYG{n}{receive\PYGZus{}command}\PYG{p}{[}\PYG{n}{CMD\PYGZus{}BUF\PYGZus{}SIZE}\PYG{p}{];}
+
+\PYG{+w}{        }\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr\PYGZus{}in}\PYG{+w}{ }\PYG{n}{server\PYGZus{}address}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{client\PYGZus{}addr}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{socklen\PYGZus{}t}\PYG{+w}{ }\PYG{n}{client\PYGZus{}addr\PYGZus{}len}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{client\PYGZus{}addr}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{c+cm}{/* Create listening socket */}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{server\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{socket}\PYG{p}{(}\PYG{n}{AF\PYGZus{}INET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOCK\PYGZus{}STREAM}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}socket\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{opt}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{setsockopt}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOL\PYGZus{}SOCKET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SO\PYGZus{}REUSEADDR}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{opt}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{opt}\PYG{p}{));}
+
+\PYG{+w}{        }\PYG{n}{memset}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}address}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{server\PYGZus{}address}\PYG{p}{));}
+\PYG{+w}{        }\PYG{n}{server\PYGZus{}address}\PYG{p}{.}\PYG{n}{sin\PYGZus{}family}\PYG{+w}{      }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{AF\PYGZus{}INET}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{server\PYGZus{}address}\PYG{p}{.}\PYG{n}{sin\PYGZus{}addr}\PYG{p}{.}\PYG{n}{s\PYGZus{}addr}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{INADDR\PYGZus{}ANY}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{server\PYGZus{}address}\PYG{p}{.}\PYG{n}{sin\PYGZus{}port}\PYG{+w}{        }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{htons}\PYG{p}{(}\PYG{n}{PORT}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{bind}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}address}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{server\PYGZus{}address}\PYG{p}{))}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}bind\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{listen}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}listen\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{c+cm}{/* Publish fd so request\PYGZus{}shutdown() can close it */}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{server\PYGZus{}sock}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server listening on port \PYGZpc{}d}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{PORT}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} OUTER LOOP: wait for a client \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{        }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}
+\PYG{+w}{        }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Waiting for client...}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{client\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{accept}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}
+\PYG{+w}{                                     }\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{client\PYGZus{}addr}\PYG{p}{,}
+\PYG{+w}{                                     }\PYG{o}{\PYGZam{}}\PYG{n}{client\PYGZus{}addr\PYGZus{}len}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{   }\PYG{c+cm}{/* accept() unblocked by request\PYGZus{}shutdown() */}
+\PYG{+w}{                }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}accept\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{c+cm}{/* Publish client fd */}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{client\PYGZus{}sock}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Client connected}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+
+\PYG{+w}{            }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} INNER LOOP: serve one client \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{            }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}
+\PYG{+w}{            }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{memset}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{CMD\PYGZus{}BUF\PYGZus{}SIZE}\PYG{p}{);}
+\PYG{+w}{                }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{recv}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{,}
+\PYG{+w}{                             }\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}
+\PYG{+w}{                             }\PYG{n}{CMD\PYGZus{}BUF\PYGZus{}SIZE}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}
+\PYG{+w}{                             }\PYG{n}{MSG\PYGZus{}DONTWAIT}\PYG{p}{);}
+
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{                }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{receive\PYGZus{}command}\PYG{p}{[}\PYG{n}{n}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}0\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{p}\PYG{o}{++}\PYG{p}{)}
+\PYG{+w}{                        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}n\PYGZsq{}}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}r\PYGZsq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}0\PYGZsq{}}\PYG{p}{;}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Command: [\PYGZpc{}s]}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{);}
+
+\PYG{+w}{                    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} start: one\PYGZhy{}shot batch send \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{                    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}start\PYGZdq{}}\PYG{p}{))}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{available}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{available}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{Ring\PYGZus{}Buf}\PYG{p}{.}\PYG{n}{rb\PYGZus{}cnt}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+
+\PYG{+w}{                        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{available}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{to\PYGZus{}send}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{available}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{96}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{l+m+mi}{96}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{available}\PYG{p}{;}
+\PYG{+w}{                            }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{to\PYGZus{}send}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{o}{++}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{PopRB}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{payload}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sid}\PYG{p}{,}
+\PYG{+w}{                                          }\PYG{o}{\PYGZam{}}\PYG{n}{payload}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{ts}\PYG{p}{,}
+\PYG{+w}{                                          }\PYG{o}{\PYGZam{}}\PYG{n}{payload}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{svalue}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                                    }\PYG{n}{to\PYGZus{}send}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{;}
+\PYG{+w}{                                    }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{                                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{to\PYGZus{}send}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                                }\PYG{k+kt}{ssize\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sent}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{send}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{payload}\PYG{p}{,}
+\PYG{+w}{                                                    }\PYG{n}{to\PYGZus{}send}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{packet}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{                                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sent}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}send\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                                }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sent \PYGZpc{}d packets}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{to\PYGZus{}send}\PYG{p}{);}
+\PYG{+w}{                            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                            }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}start: ring buffer empty}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                        }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} pause / stop \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{                    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}pause\PYGZdq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{||}
+\PYG{+w}{                             }\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}stop\PYGZdq{}}\PYG{p}{))}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}\PYGZpc{}s acknowledged}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} configure \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{                    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strncmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}configure \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{))}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{config\PYGZus{}struct}\PYG{+w}{ }\PYG{n}{cfg}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{parsed}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sscanf}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{receive\PYGZus{}command}\PYG{p}{[}\PYG{l+m+mi}{10}\PYG{p}{],}
+\PYG{+w}{                                            }\PYG{l+s}{\PYGZdq{}\PYGZpc{}u \PYGZpc{}u \PYGZpc{}u \PYGZpc{}u \PYGZpc{}u\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                                            }\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{.}\PYG{n}{temp\PYGZus{}config}\PYG{p}{,}
+\PYG{+w}{                                            }\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{.}\PYG{n}{adc0\PYGZus{}config}\PYG{p}{,}
+\PYG{+w}{                                            }\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{.}\PYG{n}{adc1\PYGZus{}config}\PYG{p}{,}
+\PYG{+w}{                                            }\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{.}\PYG{n}{switch\PYGZus{}config}\PYG{p}{,}
+\PYG{+w}{                                            }\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{.}\PYG{n}{pushb\PYGZus{}config}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{parsed}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{set\PYGZus{}config}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{cfg}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{print\PYGZus{}config}\PYG{p}{();}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                        }\PYG{k}{else}\PYG{+w}{ }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Bad configure arguments}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} disconnect: close this client, keep server alive \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{                    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}disconnect\PYGZdq{}}\PYG{p}{))}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Client requested disconnect}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{DISCONNECT}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} shutdown: tear down the entire server process \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{                    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{receive\PYGZus{}command}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}shutdown\PYGZdq{}}\PYG{p}{))}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Shutdown command received — stopping server}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{SHUTDOWN}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{c+cm}{/*}
+\PYG{c+cm}{                         * 1. Close client socket gracefully so the client}
+\PYG{c+cm}{                         *    knows the connection ended cleanly.}
+\PYG{c+cm}{                         * 2. Call request\PYGZus{}shutdown() which sets g\PYGZus{}shutdown = 1}
+\PYG{c+cm}{                         *    and closes both sockets, unblocking accept() and}
+\PYG{c+cm}{                         *    waking the sensor thread\PYGZsq{}s sleep loop.}
+\PYG{c+cm}{                         */}
+\PYG{+w}{                        }\PYG{n}{shutdown}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SHUT\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{close}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{);}
+
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{                        }\PYG{n}{request\PYGZus{}shutdown}\PYG{p}{();}
+
+\PYG{+w}{                        }\PYG{c+cm}{/* Signal sensor thread to stop */}
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thkill}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{                        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+
+\PYG{+w}{                        }\PYG{k}{goto}\PYG{+w}{ }\PYG{n}{server\PYGZus{}exit}\PYG{p}{;}\PYG{+w}{  }\PYG{c+cm}{/* break out of both loops */}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                    }\PYG{k}{else}
+\PYG{+w}{                    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Unknown command: [\PYGZpc{}s]}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{receive\PYGZus{}command}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{                }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{c+cm}{/* Peer closed connection normally */}
+\PYG{+w}{                    }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Client disconnected}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{k}{else}
+\PYG{+w}{                }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{EAGAIN}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{EWOULDBLOCK}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{EINTR}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                        }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}recv\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                        }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                }\PYG{c+cm}{/* Handle disconnect state */}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{DISCONNECT}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                    }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Closing client connection}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{n}{shutdown}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SHUT\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{n}{close}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{);}
+
+\PYG{+w}{                    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{                    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{                    }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{  }\PYG{c+cm}{/* go back to accept() */}
+\PYG{+w}{                }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{                }\PYG{n}{usleep}\PYG{p}{(}\PYG{l+m+mi}{1000}\PYG{p}{);}\PYG{+w}{  }\PYG{c+cm}{/* light pacing */}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{c+cm}{/* inner loop */}
+
+\PYG{+w}{            }\PYG{c+cm}{/* Clean up client socket if not already closed */}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{g\PYGZus{}client\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{c+cm}{/* outer loop */}
+
+\PYG{+w}{    }\PYG{n+nl}{server\PYGZus{}exit}\PYG{p}{:}
+\PYG{+w}{        }\PYG{c+cm}{/* Close listening socket if not already closed by request\PYGZus{}shutdown() */}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}server\PYGZus{}socket}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server thread exiting}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* ============================================================================}
+\PYG{c+cm}{     * MAIN}
+\PYG{c+cm}{     * ========================================================================= */}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{main}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}mng main running...}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}init}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}init}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thkill}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{n}{print\PYGZus{}config}\PYG{p}{();}
+
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{rc}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{n}{rc}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}create}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thobj}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{,}
+\PYG{+w}{                            }\PYG{n}{sensor\PYGZus{}thread\PYGZus{}function}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{rc}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{fprintf}\PYG{p}{(}\PYG{n}{stderr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}sensor thread failed: \PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{rc}\PYG{p}{));}
+\PYG{+w}{            }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sensor thread created}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{rc}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}create}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thobj}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{,}
+\PYG{+w}{                            }\PYG{n}{server\PYGZus{}thread\PYGZus{}function}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{rc}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{fprintf}\PYG{p}{(}\PYG{n}{stderr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}server thread failed: \PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{rc}\PYG{p}{));}
+\PYG{+w}{            }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server thread created}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}join}\PYG{p}{(}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thobj}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}join}\PYG{p}{(}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thobj}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}destroy}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}destroy}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}thread}\PYG{p}{.}\PYG{n}{thmutex}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}destroy}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}socket\PYGZus{}lock}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Program terminated cleanly}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

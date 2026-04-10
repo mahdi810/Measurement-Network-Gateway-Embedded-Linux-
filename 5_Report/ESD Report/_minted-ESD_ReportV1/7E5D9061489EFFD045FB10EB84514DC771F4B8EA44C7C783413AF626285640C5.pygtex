@@ -1,0 +1,22 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strncmp}\PYG{p}{(}\PYG{n}{cmd\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}CONFIGURE\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{9}\PYG{p}{))}
+\PYG{+w}{   }\PYG{p}{\PYGZob{}}
+\PYG{+w}{       }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{sensor}\PYG{p}{[}\PYG{l+m+mi}{16}\PYG{p}{];}
+\PYG{+w}{       }\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n}{rate}\PYG{p}{;}
+
+\PYG{+w}{       }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sscanf}\PYG{p}{(}\PYG{n}{cmd\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}CONFIGURE \PYGZpc{}15s \PYGZpc{}u\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{sensor}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{rate}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{)}
+\PYG{+w}{       }\PYG{p}{\PYGZob{}}
+\PYG{+w}{           }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}from\PYGZus{}string}\PYG{p}{(}\PYG{n}{sensor}\PYG{p}{);}
+\PYG{+w}{           }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{rate}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{           }\PYG{p}{\PYGZob{}}
+\PYG{+w}{               }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{               }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{rate\PYGZus{}hz}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{rate}\PYG{p}{;}
+\PYG{+w}{               }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{period\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1000000ULL}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{rate}\PYG{p}{;}
+\PYG{+w}{               }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{next\PYGZus{}deadline}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{getElapsedTime}\PYG{p}{()}\PYG{+w}{ }\PYG{o}{+}
+\PYG{+w}{                                              }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{period\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{               }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{               }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}[SERVER] CONFIGURE applied}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{           }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{       }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{   }\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

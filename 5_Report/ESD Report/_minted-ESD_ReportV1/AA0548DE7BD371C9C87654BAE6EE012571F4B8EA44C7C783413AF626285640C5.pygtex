@@ -1,0 +1,86 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n+nf}{receive\PYGZus{}data\PYGZus{}thread}\PYG{p}{(}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{arg}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Receive thread started\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{   }\PYG{c+c1}{// unsigned char raw\PYGZus{}payload[PAYLOAD\PYGZus{}SIZE];}
+\PYG{+w}{    }\PYG{n}{mng\PYGZus{}Payload\PYGZus{}t}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{;}
+
+
+
+\PYG{+w}{    }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{thread\PYGZus{}running}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{c+c1}{//memset(raw\PYGZus{}payload, 0, PAYLOAD\PYGZus{}SIZE);}
+
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Waiting for payload...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{memset}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{response}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{response}\PYG{p}{));}
+\PYG{+w}{        }\PYG{k+kt}{ssize\PYGZus{}t}\PYG{+w}{ }\PYG{n}{bytes\PYGZus{}received}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{recv}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{response}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{response}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Received \PYGZpc{}zd bytes\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{bytes\PYGZus{}received}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{bytes\PYGZus{}received}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{ECONNRESET}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{EPIPE}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}[GUI] recv error\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}recv() returned error, breaking\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{bytes\PYGZus{}received}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server closed connection\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{       }\PYG{c+cm}{/* if (bytes\PYGZus{}received != PAYLOAD\PYGZus{}SIZE) \PYGZob{}}
+\PYG{c+cm}{            log\PYGZus{}debug(\PYGZdq{}WARNING: Received \PYGZpc{}zd bytes, expected \PYGZpc{}d\PYGZdq{}, bytes\PYGZus{}received, PAYLOAD\PYGZus{}SIZE);}
+\PYG{c+cm}{        \PYGZcb{} */}
+
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{packets\PYGZus{}parsed}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Total getting sample count = \PYGZpc{}u\PYGZdq{}}\PYG{p}{,}\PYG{+w}{  }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sampleCount}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sampleCount}\PYG{+w}{  }\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{o}{++}\PYG{p}{)}
+\PYG{+w}{        }\PYG{p}{\PYGZob{}}
+
+\PYG{+w}{            }\PYG{c+c1}{//packet *pkt = (packet *)\PYGZam{}raw\PYGZus{}payload[i * PACKET\PYGZus{}SIZE];}
+
+\PYG{c+c1}{//            log\PYGZus{}debug(\PYGZdq{}Packet \PYGZpc{}d: sid=\PYGZpc{}u, svalue=\PYGZpc{}u, ts=\PYGZpc{}\PYGZdq{} PRIu64,}
+\PYG{c+c1}{//                     i, response.sendBuf[i].sensorID,}
+\PYG{c+c1}{//					 	response.sendBuf[i].sensorVal,}
+\PYG{c+c1}{//						response.sendBuf[i].elapsedTime);}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sensorID}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{log\PYGZus{}error}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Invalid sensor ID in packet \PYGZpc{}d: \PYGZpc{}u\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sensorID}\PYG{p}{);}
+\PYG{+w}{                }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{start\PYGZus{}time}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{start\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{elapsedTime}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Start time set to: \PYGZpc{}\PYGZdq{}}\PYG{+w}{ }\PYG{n}{PRIu64}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{start\PYGZus{}time}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{n}{sensor\PYGZus{}data\PYGZus{}update}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{update}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sensor\PYGZus{}data\PYGZus{}update}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{n}{g\PYGZus{}malloc}\PYG{p}{(}\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{sensor\PYGZus{}data\PYGZus{}update}\PYG{p}{));}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{update}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{log\PYGZus{}error}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Failed to allocate memory for sensor\PYGZus{}data\PYGZus{}update\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{n}{update}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{sid}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sensorID}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{update}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{svalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sensorVal}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{update}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts}\PYG{+w}{     }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{elapsedTime}\PYG{p}{;}
+
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Queuing update for sensor \PYGZpc{}d\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{response}\PYG{p}{.}\PYG{n}{sendBuf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{sensorID}\PYG{p}{);}
+
+\PYG{+w}{            }\PYG{n}{guint}\PYG{+w}{ }\PYG{n}{idle\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{g\PYGZus{}idle\PYGZus{}add}\PYG{p}{(}\PYG{n}{update\PYGZus{}sensor\PYGZus{}display}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{gpointer}\PYG{p}{)}\PYG{n}{update}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{idle\PYGZus{}id}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{log\PYGZus{}error}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}g\PYGZus{}idle\PYGZus{}add() failed\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{g\PYGZus{}free}\PYG{p}{(}\PYG{n}{update}\PYG{p}{);}
+\PYG{+w}{                }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{            }\PYG{n}{packets\PYGZus{}parsed}\PYG{o}{++}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Parsed \PYGZpc{}d packets from payload\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{packets\PYGZus{}parsed}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Receive thread exiting\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

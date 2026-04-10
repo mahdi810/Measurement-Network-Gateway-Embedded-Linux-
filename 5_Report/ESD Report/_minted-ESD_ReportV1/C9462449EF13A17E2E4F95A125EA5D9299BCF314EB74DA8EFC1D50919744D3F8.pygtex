@@ -1,0 +1,19 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{n}{clkdiv\PYGZus{}p}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{k}{PROCESS}\PYG{p}{(}\PYG{n}{S\PYGZus{}AXI\PYGZus{}ACLK}\PYG{p}{)}
+\PYG{+w}{	}\PYG{k}{VARIABLE}\PYG{+w}{ }\PYG{n}{cnt}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{Counter\PYGZus{}type}\PYG{+w}{ }\PYG{o}{:=}\PYG{+w}{ }\PYG{n}{BCLK\PYGZus{}DIVIDE}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{	}\PYG{k}{BEGIN}
+\PYG{+w}{	    }\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{rising\PYGZus{}edge}\PYG{p}{(}\PYG{n}{S\PYGZus{}AXI\PYGZus{}ACLK}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{	        }\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{S\PYGZus{}AXI\PYGZus{}ARESETN}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}0\PYGZsq{}}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{	            }\PYG{n}{cnt}\PYG{+w}{ }\PYG{o}{:=}\PYG{+w}{ }\PYG{n}{BCLK\PYGZus{}DIVIDE}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{	        }\PYG{k}{ELSE}
+\PYG{+w}{	            }\PYG{n}{spiclk\PYGZus{}p}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}0\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{	            }\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{cnt}\PYG{o}{=}\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{	                }\PYG{n}{spiclk\PYGZus{}p}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}1\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{	                }\PYG{n}{cnt}\PYG{+w}{ }\PYG{o}{:=}\PYG{+w}{ }\PYG{n}{BCLK\PYGZus{}DIVIDE}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{	            }\PYG{k}{ELSE}
+\PYG{+w}{	                }\PYG{n}{cnt}\PYG{+w}{ }\PYG{o}{:=}\PYG{+w}{ }\PYG{n}{cnt}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{	            }\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{	        }\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{	    }\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{	}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{PROCESS}\PYG{+w}{ }\PYG{n+nc}{clkdiv\PYGZus{}p}\PYG{p}{;}
+\end{Verbatim}

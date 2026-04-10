@@ -1,0 +1,6 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{state}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{STATE\PYGZus{}CONNECTED}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{send}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}START}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{6}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{STATE\PYGZus{}RUNNING}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

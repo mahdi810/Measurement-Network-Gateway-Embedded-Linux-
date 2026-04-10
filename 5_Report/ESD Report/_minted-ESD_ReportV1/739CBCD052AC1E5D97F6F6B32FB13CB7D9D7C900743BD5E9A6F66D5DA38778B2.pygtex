@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+petalinux\PYGZhy{}create \PYGZhy{}\PYGZhy{}type project \PYGZhy{}\PYGZhy{}template zynq \PYGZhy{}\PYGZhy{}name meas\PYGZus{}gateway
+\end{Verbatim}

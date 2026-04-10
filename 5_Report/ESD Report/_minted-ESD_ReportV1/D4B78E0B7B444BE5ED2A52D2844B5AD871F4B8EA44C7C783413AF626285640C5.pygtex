@@ -1,0 +1,14 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n+nf}{server\PYGZus{}thread\PYGZus{}function}\PYG{p}{(}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{arg}\PYG{p}{)}
+\PYG{+w}{	}\PYG{p}{\PYGZob{}}
+\PYG{+w}{		}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{arg}\PYG{p}{;}\PYG{+w}{  }\PYG{c+c1}{// Unused parameter}
+\PYG{+w}{		}\PYG{n}{packet}\PYG{+w}{ }\PYG{n}{payload}\PYG{p}{[}\PYG{l+m+mi}{96}\PYG{p}{];}
+\PYG{+w}{		}\PYG{k+kt}{char}\PYG{+w}{   }\PYG{n}{receive\PYGZus{}command}\PYG{p}{[}\PYG{n}{CMD\PYGZus{}BUF\PYGZus{}SIZE}\PYG{p}{];}
+\PYG{+w}{		}
+\PYG{+w}{		}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr\PYGZus{}in}\PYG{+w}{ }\PYG{n}{server\PYGZus{}address}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{client\PYGZus{}addr}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k+kt}{socklen\PYGZus{}t}\PYG{+w}{ }\PYG{n}{client\PYGZus{}addr\PYGZus{}len}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{client\PYGZus{}addr}\PYG{p}{);}
+\PYG{+w}{		}
+\PYG{+w}{		}\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PAUSED}\PYG{p}{;}
+\PYG{+w}{		}\PYG{c+c1}{// ... continue with socket creation}
+\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

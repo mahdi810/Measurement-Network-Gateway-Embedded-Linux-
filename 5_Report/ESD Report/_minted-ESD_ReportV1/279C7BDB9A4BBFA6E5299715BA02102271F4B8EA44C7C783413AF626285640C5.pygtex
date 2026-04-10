@@ -1,0 +1,22 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+c1}{// If streaming, stop first}
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{state}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{STATE\PYGZus{}RUNNING}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{sock\PYGZus{}fd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{send}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}STOP}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+c1}{// Send shutdown command}
+\PYG{n}{send}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}SHUTDOWN}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{9}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{c+c1}{// Cleanup network resources}
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{net\PYGZus{}running}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{net\PYGZus{}running}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{shutdown}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SHUT\PYGZus{}RDWR}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}join}\PYG{p}{(}\PYG{n}{net\PYGZus{}thread}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+c1}{// Close socket and exit}
+\PYG{n}{close}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{);}
+\PYG{n}{gtk\PYGZus{}main\PYGZus{}quit}\PYG{p}{();}
+\end{Verbatim}

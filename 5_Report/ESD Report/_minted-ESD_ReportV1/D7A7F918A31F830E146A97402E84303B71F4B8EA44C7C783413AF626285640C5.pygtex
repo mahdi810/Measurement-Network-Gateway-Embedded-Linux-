@@ -1,0 +1,5 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{        }\PYG{c+c1}{// SPI command register}
+\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{mreg}\PYG{p}{;}\PYG{+w}{   }\PYG{c+c1}{// Register address to read}
+\PYG{n}{write}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+\end{Verbatim}

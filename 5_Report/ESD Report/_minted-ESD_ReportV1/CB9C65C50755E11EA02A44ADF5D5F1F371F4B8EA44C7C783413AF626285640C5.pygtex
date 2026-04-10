@@ -1,0 +1,25 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+cm}{/* Max 2 sensors — block a 3rd enable */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}sensor\PYGZus{}toggled}\PYG{p}{(}\PYG{n}{GtkToggleButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{toggle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GPOINTER\PYGZus{}TO\PYGZus{}INT}\PYG{p}{(}\PYG{n}{user\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{active}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}get\PYGZus{}active}\PYG{p}{(}\PYG{n}{toggle}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{active}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{s}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{s}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{s}\PYG{p}{)}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{s}\PYG{p}{])}\PYG{+w}{ }\PYG{n}{count}\PYG{o}{++}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}signal\PYGZus{}handlers\PYGZus{}block\PYGZus{}by\PYGZus{}func}\PYG{p}{(}
+\PYG{+w}{                }\PYG{n}{toggle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}sensor\PYGZus{}toggled}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}set\PYGZus{}active}\PYG{p}{(}\PYG{n}{toggle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}signal\PYGZus{}handlers\PYGZus{}unblock\PYGZus{}by\PYGZus{}func}\PYG{p}{(}
+\PYG{+w}{                }\PYG{n}{toggle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}sensor\PYGZus{}toggled}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}WARN: \PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                }\PYG{l+s}{\PYGZdq{}Maximum 2 sensors can be displayed — uncheck one first\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{active}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

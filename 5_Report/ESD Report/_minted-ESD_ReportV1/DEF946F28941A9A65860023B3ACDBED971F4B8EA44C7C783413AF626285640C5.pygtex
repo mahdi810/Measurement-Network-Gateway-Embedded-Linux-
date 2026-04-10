@@ -1,0 +1,14 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+cp}{\PYGZsh{}define RBUF\PYGZus{}LEN 2048}
+
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{bmutex}\PYG{p}{;}\PYG{+w}{              }\PYG{c+c1}{// mutex for thread safety}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{sensor\PYGZus{}id}\PYG{p}{[}\PYG{n}{RBUF\PYGZus{}LEN}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{tstamp}\PYG{p}{[}\PYG{n}{RBUF\PYGZus{}LEN}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{svalue}\PYG{p}{[}\PYG{n}{RBUF\PYGZus{}LEN}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{rb\PYGZus{}pointer}\PYG{p}{;}\PYG{+w}{        }\PYG{c+c1}{// write index}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{rb\PYGZus{}cnt}\PYG{p}{;}\PYG{+w}{            }\PYG{c+c1}{// number of valid entries}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{RingB\PYGZus{}Struct}\PYG{p}{;}
+
+\PYG{k}{extern}\PYG{+w}{ }\PYG{n}{RingB\PYGZus{}Struct}\PYG{+w}{ }\PYG{n}{Ring\PYGZus{}Buf}\PYG{p}{;}
+\end{Verbatim}

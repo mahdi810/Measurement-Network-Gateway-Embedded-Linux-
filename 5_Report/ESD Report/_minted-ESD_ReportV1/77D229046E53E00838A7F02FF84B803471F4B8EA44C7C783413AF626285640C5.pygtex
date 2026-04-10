@@ -1,0 +1,12 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{MaxWrite}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{mreg}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{msend}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{transm\PYGZus{}data}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{xdata}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{k}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{mreg}\PYG{+w}{ }\PYG{o}{|=}\PYG{+w}{ }\PYG{l+m+mh}{0x080}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{transm\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{mreg}\PYG{+w}{ }\PYG{o}{\PYGZlt{}\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{|}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{msend}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{l+m+mh}{0x0ff}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{transm\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{write}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+\end{Verbatim}

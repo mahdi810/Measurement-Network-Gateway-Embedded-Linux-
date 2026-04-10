@@ -1,0 +1,18 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}
+\PYG{+w}{	}\PYG{p}{\PYGZob{}}
+\PYG{+w}{		}\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Waiting for client...}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{		}
+\PYG{+w}{		}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{client\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{accept}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}
+\PYG{+w}{		}\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{client\PYGZus{}addr}\PYG{p}{,}
+\PYG{+w}{		}\PYG{o}{\PYGZam{}}\PYG{n}{client\PYGZus{}addr\PYGZus{}len}\PYG{p}{);}
+\PYG{+w}{		}\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{			}\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}shutdown}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}
+\PYG{+w}{			}\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}accept\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{			}\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{		}\PYG{p}{\PYGZcb{}}
+\PYG{+w}{		}
+\PYG{+w}{		}\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Client connected}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{		}\PYG{c+c1}{// ... proceed to serve client}
+\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

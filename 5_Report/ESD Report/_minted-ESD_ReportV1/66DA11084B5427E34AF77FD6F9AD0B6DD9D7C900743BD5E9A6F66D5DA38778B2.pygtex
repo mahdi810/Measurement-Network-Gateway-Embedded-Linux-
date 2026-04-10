@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+ petalinux\PYGZhy{}config –get\PYGZhy{}hw\PYGZhy{}description =file\PYGZus{}path
+\end{Verbatim}

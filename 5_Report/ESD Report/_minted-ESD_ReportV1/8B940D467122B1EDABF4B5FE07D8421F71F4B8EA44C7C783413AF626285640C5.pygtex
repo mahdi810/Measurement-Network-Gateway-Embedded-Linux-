@@ -1,0 +1,8 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{enum}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{   }\PYG{n}{STREAM\PYGZus{}IDLE}\PYG{p}{,}
+\PYG{+w}{   }\PYG{n}{STREAM\PYGZus{}RUNNING}\PYG{p}{,}
+\PYG{+w}{   }\PYG{n}{STREAM\PYGZus{}DISCONNECT}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}t}\PYG{p}{;}
+\end{Verbatim}

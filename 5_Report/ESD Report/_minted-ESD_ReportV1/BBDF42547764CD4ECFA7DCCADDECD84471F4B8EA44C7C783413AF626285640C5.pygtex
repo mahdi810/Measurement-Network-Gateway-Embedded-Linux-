@@ -1,0 +1,109 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{update\PYGZus{}last\PYGZus{}values}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+cm}{/* Clear */}
+\PYG{+w}{    }\PYG{n}{GtkTextIter}\PYG{+w}{ }\PYG{n}{start}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{end}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}bounds}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{start}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}delete}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{start}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkTextIter}\PYG{+w}{ }\PYG{n}{it}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* Collect enabled sensor ids (max 2) */}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{esid}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{\PYGZcb{};}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{ecnt}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{ecnt}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{])}
+\PYG{+w}{            }\PYG{n}{esid}\PYG{p}{[}\PYG{n}{ecnt}\PYG{o}{++}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ecnt}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}
+\PYG{+w}{            }\PYG{l+s}{\PYGZdq{}No sensors selected for display.}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* Collect last LAST\PYGZus{}N samples for each enabled sensor */}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{vals}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{][}\PYG{n}{LAST\PYGZus{}N}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}ms}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{][}\PYG{n}{LAST\PYGZus{}N}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{    }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{2}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{\PYGZcb{};}
+
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{c}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{c}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{ecnt}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{c}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{b}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{esid}\PYG{p}{[}\PYG{n}{c}\PYG{p}{]];}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{total}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{total}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{total}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{total}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{show}\PYG{p}{[}\PYG{n}{c}\PYG{p}{]}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{LAST\PYGZus{}N}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{LAST\PYGZus{}N}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{n}{c}\PYG{p}{];}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{logical}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{n}{c}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{;}
+\PYG{+w}{                }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{idx}\PYG{+w}{     }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{logical}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{vals}\PYG{p}{[}\PYG{n}{c}\PYG{p}{][}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{];}
+\PYG{+w}{                }\PYG{n}{ts\PYGZus{}ms}\PYG{p}{[}\PYG{n}{c}\PYG{p}{][}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{1000.0}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ecnt}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{c+cm}{/* ── Single column ──────────────────────────────────── */}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}\PYGZhy{}20s   \PYGZpc{}8s   \PYGZpc{}14s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{esid}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]].}\PYG{n}{name}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Value\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Timestamp(ms)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}
+\PYG{+w}{            }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{row}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{row}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{];}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{row}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{row}\PYG{p}{;}\PYG{+w}{   }\PYG{c+cm}{/* newest first */}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}\PYGZhy{}20s   \PYGZpc{}8.0f   \PYGZpc{}14.3f}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{l+s}{\PYGZdq{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{vals}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{][}\PYG{n}{i}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}ms}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{][}\PYG{n}{i}\PYG{p}{]);}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{c+cm}{/* ── Two columns side by side ──────────────────────── */}
+
+\PYG{+w}{        }\PYG{c+cm}{/* Sensor name header row */}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}
+\PYG{+w}{                 }\PYG{l+s}{\PYGZdq{}  \PYGZpc{}\PYGZhy{}18s  \PYGZpc{}8s  \PYGZpc{}14s  |  \PYGZpc{}\PYGZhy{}18s  \PYGZpc{}8s  \PYGZpc{}14s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{esid}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]].}\PYG{n}{name}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Value\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Timestamp(ms)\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{esid}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]].}\PYG{n}{name}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Value\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Timestamp(ms)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}
+\PYG{+w}{            }\PYG{l+s}{\PYGZdq{}  \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZdq{}}
+\PYG{+w}{            }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{}}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{max\PYGZus{}rows}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{])}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{];}
+
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{row}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{row}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{max\PYGZus{}rows}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{row}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{col0}\PYG{p}{[}\PYG{l+m+mi}{64}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{col1}\PYG{p}{[}\PYG{l+m+mi}{64}\PYG{p}{];}
+
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i0}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{row}\PYG{p}{;}\PYG{+w}{   }\PYG{c+cm}{/* newest first */}
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i1}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{show}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{row}\PYG{p}{;}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{i0}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{                }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{col0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{col0}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}8.0f  \PYGZpc{}14.3f\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                         }\PYG{n}{vals}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{][}\PYG{n}{i0}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}ms}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{][}\PYG{n}{i0}\PYG{p}{]);}
+\PYG{+w}{            }\PYG{k}{else}
+\PYG{+w}{                }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{col0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{col0}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}8s  \PYGZpc{}14s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{i1}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{                }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{col1}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{col1}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}8.0f  \PYGZpc{}14.3f\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                         }\PYG{n}{vals}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{][}\PYG{n}{i1}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}ms}\PYG{p}{[}\PYG{l+m+mi}{1}\PYG{p}{][}\PYG{n}{i1}\PYG{p}{]);}
+\PYG{+w}{            }\PYG{k}{else}
+\PYG{+w}{                }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{col1}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{col1}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}8s  \PYGZpc{}14s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}
+\PYG{+w}{                     }\PYG{l+s}{\PYGZdq{}  \PYGZpc{}\PYGZhy{}18s  \PYGZpc{}s  |  \PYGZpc{}\PYGZhy{}18s  \PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{l+s}{\PYGZdq{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{col0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{col1}\PYG{p}{);}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}val\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{it}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

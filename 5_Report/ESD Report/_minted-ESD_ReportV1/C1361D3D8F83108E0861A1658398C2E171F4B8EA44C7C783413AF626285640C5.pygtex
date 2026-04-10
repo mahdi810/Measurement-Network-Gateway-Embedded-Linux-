@@ -1,0 +1,14 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{prefix}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{text}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkTextIter}\PYG{+w}{ }\PYG{n}{end}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{[}\PYG{l+m+mi}{512}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}s\PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{prefix}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{text}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkTextMark}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{mark}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}place\PYGZus{}cursor}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}scroll\PYGZus{}mark\PYGZus{}onscreen}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{mark}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

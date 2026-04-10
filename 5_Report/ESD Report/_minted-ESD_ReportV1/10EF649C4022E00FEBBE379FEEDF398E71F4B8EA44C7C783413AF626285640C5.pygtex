@@ -1,0 +1,23 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{readButtons}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{button\PYGZus{}data}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+c1}{// Step 1: Prepare button read request}
+
+\PYG{+w}{    }\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{REGNUM\PYGZus{}ID}\PYG{p}{;}\PYG{+w}{     }\PYG{c+c1}{// Register selector = 0x0FF}
+\PYG{+w}{    }\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{7}\PYG{p}{;}\PYG{+w}{            }\PYG{c+c1}{// Button selector code}
+
+\PYG{+w}{    }\PYG{c+c1}{// Step 2: Send request to kernel module}
+\PYG{+w}{    }\PYG{n}{write}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+c1}{// Step 3: Read button states from kernel module}
+\PYG{+w}{    }\PYG{n}{read}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+c1}{// Step 4: Extract 5\PYGZhy{}bit button data}
+\PYG{+w}{    }\PYG{n}{button\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{l+m+mh}{0x1F}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+c1}{// Step 5: Return the button state}
+\PYG{+w}{      }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{button\PYGZus{}data}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

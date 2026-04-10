@@ -1,0 +1,23 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}set\PYGZus{}sliding\PYGZus{}window\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{new\PYGZus{}window}\PYG{p}{;}
+
+
+\PYG{+w}{    }\PYG{n}{new\PYGZus{}window}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{p}{)}\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}get\PYGZus{}value}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SPIN\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{spin\PYGZus{}sliding\PYGZus{}window}\PYG{p}{));}
+
+
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{new\PYGZus{}window}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{100000}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{new\PYGZus{}window}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{l+m+mi}{10000000}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}
+\PYG{+w}{                           }\PYG{l+s}{\PYGZdq{}Sliding window must be 100,000 – 10,000,000 µs\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{SLIDING\PYGZus{}WINDOW\PYGZus{}US}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{new\PYGZus{}window}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{[}\PYG{l+m+mi}{128}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Sliding window set to \PYGZpc{}\PYGZdq{}}\PYG{+w}{ }\PYG{n}{PRIu64}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{} µs\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SLIDING\PYGZus{}WINDOW\PYGZus{}US}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

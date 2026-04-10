@@ -1,0 +1,10 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{LedWrite}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n}{LED\PYGZus{}hex\PYGZus{}Value}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{ssize\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ret}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{       }\PYG{c+c1}{// write reg0 (lower 8 bits = uzLED)}
+\PYG{+w}{    }\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{p}{)}\PYG{n}{LED\PYGZus{}hex\PYGZus{}Value}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ret}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{write}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{TF\PYGZus{}Obj\PYGZus{}Snd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ret}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}LED writing failed\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

@@ -1,0 +1,12 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{unsigned}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{readZedSwitches}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{REGNUM\PYGZus{}ID}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{write}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{read}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MEASOBJ\PYGZus{}SIZE}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{tf\PYGZus{}obj\PYGZus{}rcv}\PYG{p}{.}\PYG{n}{rvalue}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{l+m+mh}{0xff}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

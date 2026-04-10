@@ -1,0 +1,10 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{sock\PYGZus{}fd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{socket}\PYG{p}{(}\PYG{n}{AF\PYGZus{}INET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOCK\PYGZus{}STREAM}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{n}{fcntl}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{F\PYGZus{}SETFL}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{O\PYGZus{}NONBLOCK}\PYG{p}{);}
+
+\PYG{n}{res}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{connect}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{addr}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{addr}\PYG{p}{));}
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{res}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{errno}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{EINPROGRESS}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{select}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{wfds}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{timeout}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

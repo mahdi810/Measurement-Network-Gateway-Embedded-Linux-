@@ -1,0 +1,8 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{initTimer}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{timespec}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{clock\PYGZus{}gettime}\PYG{p}{(}\PYG{n}{CLOCK\PYGZus{}MONOTONIC}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{ts}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{us\PYGZus{}startup\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{.}\PYG{n}{tv\PYGZus{}sec}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mi}{1000000}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{.}\PYG{n}{tv\PYGZus{}nsec}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{1000}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

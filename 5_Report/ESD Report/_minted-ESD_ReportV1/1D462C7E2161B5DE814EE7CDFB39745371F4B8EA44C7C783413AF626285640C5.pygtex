@@ -1,0 +1,11 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{rbuf}\PYG{p}{[}\PYG{n}{head}\PYG{p}{].}\PYG{n}{sensor\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{;}
+\PYG{n}{rbuf}\PYG{p}{[}\PYG{n}{head}\PYG{p}{].}\PYG{n}{tstamp}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{timestamp}\PYG{p}{;}
+\PYG{n}{rbuf}\PYG{p}{[}\PYG{n}{head}\PYG{p}{].}\PYG{n}{svalue}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{value}\PYG{p}{;}
+
+\PYG{n}{head}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{head}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{RBUF\PYGZus{}LEN}\PYG{p}{;}
+
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{head}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{tail}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{tail}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{tail}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{RBUF\PYGZus{}LEN}\PYG{p}{;}\PYG{+w}{   }\PYG{c+c1}{// overwrite oldest}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

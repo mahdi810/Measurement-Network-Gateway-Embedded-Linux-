@@ -1,0 +1,26 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+cm}{/* ============ PERIODIC GUI UPDATE ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n+nf}{ui\PYGZus{}update\PYGZus{}cb}\PYG{p}{(}\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{should\PYGZus{}close}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{c+cm}{/* 0 → 1: connection just established */}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{prev\PYGZus{}net\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{prev\PYGZus{}net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connected \PYGZhy{} Ready\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Connected to server\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{c+cm}{/* 1 → 0: lost unexpectedly (not from a user disconnect) */}
+\PYG{+w}{    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{prev\PYGZus{}net\PYGZus{}connected}
+\PYG{+w}{             }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{prev\PYGZus{}net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connecting...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}WARN: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Connection lost — reconnecting...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}last\PYGZus{}values}\PYG{p}{();}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

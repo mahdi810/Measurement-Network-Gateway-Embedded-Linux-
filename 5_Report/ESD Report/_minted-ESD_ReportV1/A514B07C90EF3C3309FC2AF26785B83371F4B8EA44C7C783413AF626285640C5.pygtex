@@ -1,0 +1,10 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{   }\PYG{n}{values}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{];}\PYG{+w}{    }\PYG{c+cm}{/* sensor values (converted to double) */}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{  }\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{];}\PYG{+w}{     }\PYG{c+cm}{/* timestamps in microseconds */}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{count}\PYG{p}{;}\PYG{+w}{                  }\PYG{c+cm}{/* number of stored samples */}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{oldest\PYGZus{}idx}\PYG{p}{;}\PYG{+w}{             }\PYG{c+cm}{/* index of oldest sample (when full) */}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{  }\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{p}{;}\PYG{+w}{          }\PYG{c+cm}{/* timestamp of the very first sample */}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{lock}\PYG{p}{;}\PYG{+w}{            }\PYG{c+cm}{/* protects concurrent access */}
+\PYG{+w}{	}\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{p}{;}
+\end{Verbatim}

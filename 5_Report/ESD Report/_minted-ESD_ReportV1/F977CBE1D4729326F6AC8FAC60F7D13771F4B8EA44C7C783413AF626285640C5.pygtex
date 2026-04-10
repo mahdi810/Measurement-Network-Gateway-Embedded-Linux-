@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{mutex}\PYG{p}{);}
+\end{Verbatim}

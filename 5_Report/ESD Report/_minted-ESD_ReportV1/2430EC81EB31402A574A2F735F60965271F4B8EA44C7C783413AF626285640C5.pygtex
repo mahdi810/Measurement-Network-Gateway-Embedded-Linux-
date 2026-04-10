@@ -1,0 +1,6 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{system\PYGZus{}mode}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{n}{MODE\PYGZus{}SIM}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{backend\PYGZus{}read\PYGZus{}adc}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{adc\PYGZus{}zero\PYGZus{}cache}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{adc\PYGZus{}one\PYGZus{}cache}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

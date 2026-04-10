@@ -1,0 +1,24 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{n+nc}{sslcmb\PYGZus{}proc}\PYG{o}{:}\PYG{+w}{ }\PYG{k}{PROCESS}\PYG{p}{(}\PYG{n}{ssl\PYGZus{}state}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{state}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{start}\PYG{p}{)}
+\PYG{+w}{	}\PYG{k}{BEGIN}
+\PYG{+w}{		}\PYG{n}{sslnxt\PYGZus{}state}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}state}\PYG{p}{;}
+\PYG{+w}{		}\PYG{n}{start\PYGZus{}i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}0\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{		}\PYG{n}{done}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}0\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{CASE}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}state}\PYG{+w}{ }\PYG{k}{IS}
+\PYG{+w}{			}\PYG{k}{WHEN}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}idle}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
+\PYG{+w}{				}\PYG{n}{done}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}1\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{				}\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{start}\PYG{o}{=}\PYG{l+s+sc}{\PYGZsq{}1\PYGZsq{}}\PYG{+w}{ }\PYG{k}{AND}\PYG{+w}{ }\PYG{n}{state}\PYG{o}{=}\PYG{n}{sidle}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{					}\PYG{n}{sslnxt\PYGZus{}state}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}start}\PYG{p}{;}
+\PYG{+w}{				}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{WHEN}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}start}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
+\PYG{+w}{				}\PYG{n}{start\PYGZus{}i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}1\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{				}\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{state}\PYG{o}{=}\PYG{n}{sstartx}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{					}\PYG{n}{sslnxt\PYGZus{}state}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}run}\PYG{p}{;}
+\PYG{+w}{				}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{			}\PYG{k}{WHEN}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}run}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
+\PYG{+w}{				}\PYG{k}{IF}\PYG{+w}{ }\PYG{n}{state}\PYG{o}{=}\PYG{n}{sidle}\PYG{+w}{ }\PYG{k}{THEN}
+\PYG{+w}{					}\PYG{n}{sslnxt\PYGZus{}state}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{ssl\PYGZus{}idle}\PYG{p}{;}
+\PYG{+w}{				}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{IF}\PYG{p}{;}
+\PYG{+w}{		}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{CASE}\PYG{p}{;}
+\PYG{+w}{	}\PYG{k}{END}\PYG{+w}{ }\PYG{k}{PROCESS}\PYG{+w}{ }\PYG{n+nc}{sslcmb\PYGZus{}proc}\PYG{p}{;}
+\end{Verbatim}

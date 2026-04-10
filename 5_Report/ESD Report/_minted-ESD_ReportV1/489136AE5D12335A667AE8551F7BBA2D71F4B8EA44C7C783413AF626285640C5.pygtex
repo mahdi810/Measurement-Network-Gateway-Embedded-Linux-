@@ -1,0 +1,4 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{	}\PYG{k+kt}{ssize\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sent}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{send}\PYG{p}{(}\PYG{n}{client\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{payload}\PYG{p}{,}
+\PYG{+w}{	}\PYG{n}{to\PYGZus{}send}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{packet}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\end{Verbatim}

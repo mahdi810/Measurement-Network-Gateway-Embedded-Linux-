@@ -1,0 +1,1055 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+
+
+\PYG{c+cm}{/*}
+\PYG{c+cm}{ * mng\PYGZus{}client\PYGZus{}gui\PYGZus{}timestamp.c}
+\PYG{c+cm}{ *}
+\PYG{c+cm}{ * MNG Sensor Client \PYGZhy{} GTK3 + Cairo real\PYGZhy{}time visualization}
+\PYG{c+cm}{ * + In\PYGZhy{}window command terminal}
+\PYG{c+cm}{ * + AUTO\PYGZhy{}POLLING: sends \PYGZdq{}start\PYGZdq{} every T ms when streaming is active}
+\PYG{c+cm}{ * + SHUTDOWN button: sends \PYGZdq{}shutdown\PYGZdq{} to terminate the server process}
+\PYG{c+cm}{ *}
+\PYG{c+cm}{ * Compile:}
+\PYG{c+cm}{ *   gcc \PYGZhy{}Wall \PYGZhy{}O2 mng\PYGZus{}client\PYGZus{}gui\PYGZus{}timestamp.c \PYGZhy{}o mng\PYGZus{}client \PYGZbs{}}
+\PYG{c+cm}{ *       `pkg\PYGZhy{}config \PYGZhy{}\PYGZhy{}cflags \PYGZhy{}\PYGZhy{}libs gtk+\PYGZhy{}3.0` \PYGZhy{}lpthread \PYGZhy{}lm}
+\PYG{c+cm}{ */}
+
+
+
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}gtk/gtk.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}cairo.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}arpa/inet.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}sys/socket.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}pthread.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}errno.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdint.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}inttypes.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}string.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdlib.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdio.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}unistd.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}math.h\PYGZgt{}}
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdarg.h\PYGZgt{}}
+
+\PYG{c+cm}{/* ============ CONSTANTS ============ */}
+\PYG{c+cp}{\PYGZsh{}define SERVER\PYGZus{}PORT              50012}
+\PYG{c+cp}{\PYGZsh{}define MAX\PYGZus{}SAMPLES              2000}
+\PYG{c+cp}{\PYGZsh{}define MAX\PYGZus{}SENSORS              5}
+\PYG{c+cp}{\PYGZsh{}define UPDATE\PYGZus{}INTERVAL\PYGZus{}MS       50}
+\PYG{c+cp}{\PYGZsh{}define DEFAULT\PYGZus{}POLL\PYGZus{}INTERVAL\PYGZus{}MS 1}
+
+\PYG{c+cp}{\PYGZsh{}define SENSOR\PYGZus{}TEMP   1}
+\PYG{c+cp}{\PYGZsh{}define SENSOR\PYGZus{}ADC0   2}
+\PYG{c+cp}{\PYGZsh{}define SENSOR\PYGZus{}ADC1   3}
+\PYG{c+cp}{\PYGZsh{}define SENSOR\PYGZus{}SWITCH 4}
+\PYG{c+cp}{\PYGZsh{}define SENSOR\PYGZus{}PUSHB  5}
+
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{\PYGZus{}\PYGZus{}attribute\PYGZus{}\PYGZus{}}\PYG{p}{((}\PYG{n}{packed}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{int32\PYGZus{}t}\PYG{+w}{  }\PYG{n}{sid}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int32\PYGZus{}t}\PYG{+w}{  }\PYG{n}{svalue}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{  }\PYG{n}{ts}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{net\PYGZus{}packet\PYGZus{}t}\PYG{p}{;}
+
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{  }\PYG{n}{values}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{     }\PYG{n}{count}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{     }\PYG{n}{oldest\PYGZus{}idx}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{lock}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{p}{;}
+
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{name}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{      }\PYG{n}{color\PYGZus{}r}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{color\PYGZus{}g}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{color\PYGZus{}b}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}info\PYGZus{}t}\PYG{p}{;}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}info\PYGZus{}t}\PYG{+w}{ }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Unknown\PYGZdq{}}\PYG{p}{,}\PYG{+w}{          }\PYG{l+m+mf}{0.50}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.50}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.50}\PYG{+w}{ }\PYG{p}{\PYGZcb{},}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Temperature (°C)\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.22}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.74}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.97}\PYG{+w}{ }\PYG{p}{\PYGZcb{},}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}ADC0\PYGZdq{}}\PYG{p}{,}\PYG{+w}{             }\PYG{l+m+mf}{1.00}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.33}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.33}\PYG{+w}{ }\PYG{p}{\PYGZcb{},}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}ADC1\PYGZdq{}}\PYG{p}{,}\PYG{+w}{             }\PYG{l+m+mf}{0.54}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.36}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.96}\PYG{+w}{ }\PYG{p}{\PYGZcb{},}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Switch\PYGZdq{}}\PYG{p}{,}\PYG{+w}{           }\PYG{l+m+mf}{0.06}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.72}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.50}\PYG{+w}{ }\PYG{p}{\PYGZcb{},}
+\PYG{+w}{    }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Push Button\PYGZdq{}}\PYG{p}{,}\PYG{+w}{      }\PYG{l+m+mf}{0.96}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.62}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.05}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{};}
+
+\PYG{c+cm}{/* ============ APP CONTEXT ============ */}
+\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{window}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{ip\PYGZus{}entry}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{port\PYGZus{}entry}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{connect\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{disconnect\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{configure\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{start\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{pause\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{stop\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{shutdown\PYGZus{}btn}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{status\PYGZus{}label}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{stats\PYGZus{}box}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{time\PYGZus{}scale}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{rate\PYGZus{}spin}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{sensor\PYGZus{}check}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{];}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{cmd\PYGZus{}entry}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkTextBuffer}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{     }\PYG{o}{*}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{guint}\PYG{+w}{          }\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{            }\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{          }\PYG{n}{sockfd}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}t}\PYG{+w}{    }\PYG{n}{net\PYGZus{}thread}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{net\PYGZus{}running}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{net\PYGZus{}connected}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{should\PYGZus{}close}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{is\PYGZus{}connected}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{is\PYGZus{}streaming}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{          }\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{          }\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{];}
+
+\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{n}{buf}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{];}
+
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{          }\PYG{n}{time\PYGZus{}range\PYGZus{}seconds}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{      }\PYG{n}{last\PYGZus{}data\PYGZus{}time\PYGZus{}us}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{app\PYGZus{}t}\PYG{p}{;}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{app\PYGZus{}t}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{;}
+
+\PYG{c+cm}{/* ============ LOGGING ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{log\PYGZus{}msg}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{tag}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{fmt}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{...)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{va\PYGZus{}list}\PYG{+w}{ }\PYG{n}{ap}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{va\PYGZus{}start}\PYG{p}{(}\PYG{n}{ap}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{fmt}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{fprintf}\PYG{p}{(}\PYG{n}{stderr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}[\PYGZpc{}s] \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{tag}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{vfprintf}\PYG{p}{(}\PYG{n}{stderr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{fmt}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ap}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{fprintf}\PYG{p}{(}\PYG{n}{stderr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{va\PYGZus{}end}\PYG{p}{(}\PYG{n}{ap}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{prefix}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{text}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{GtkTextIter}\PYG{+w}{ }\PYG{n}{end}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{[}\PYG{l+m+mi}{512}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}s\PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{prefix}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{text}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}end\PYGZus{}iter}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkTextMark}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{mark}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}get\PYGZus{}insert}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}buffer\PYGZus{}place\PYGZus{}cursor}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{end}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}scroll\PYGZus{}mark\PYGZus{}onscreen}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{mark}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ SENSOR BUFFER API ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{buffer\PYGZus{}init}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{b}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}init}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{buffer\PYGZus{}add\PYGZus{}sample}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{value}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{int64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{b}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ts\PYGZus{}us}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}data\PYGZus{}time\PYGZus{}us}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{last\PYGZus{}data\PYGZus{}time\PYGZus{}us}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{idx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{o}{++}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)}\PYG{n}{value}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{idx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)}\PYG{n}{value}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts\PYGZus{}us}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{buffer\PYGZus{}get\PYGZus{}copy}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{x\PYGZus{}ms}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{y}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{max\PYGZus{}len}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{b}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{max\PYGZus{}len}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{max\PYGZus{}len}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{n}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{x\PYGZus{}ms}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{1000.0}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{y}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{n}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{idx}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{oldest\PYGZus{}idx}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZpc{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{x\PYGZus{}ms}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ts\PYGZus{}us}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{start\PYGZus{}time\PYGZus{}us}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{1000.0}\PYG{p}{;}
+\PYG{+w}{            }\PYG{n}{y}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{idx}\PYG{p}{];}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{n}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{buffer\PYGZus{}stats}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{minv}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{maxv}\PYG{p}{,}\PYG{k+kt}{double}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{avg}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{count}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{b}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}lock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{mn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{mx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{l+m+mi}{0}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{sum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{v}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{values}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{v}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{mn}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{mn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{v}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{mx}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{mx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sum}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{o}{*}\PYG{n}{minv}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{mn}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{maxv}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{mx}\PYG{p}{;}
+\PYG{+w}{    }\PYG{o}{*}\PYG{n}{avg}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sum}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{p}{;}
+\PYG{+w}{    }\PYG{o}{*}\PYG{n}{count}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{count}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}unlock}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{b}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ NETWORK THREAD ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n+nf}{network\PYGZus{}thread\PYGZus{}func}\PYG{p}{(}\PYG{k+kt}{void}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{arg}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{app\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{app}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{app\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{n}{arg}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{net\PYGZus{}running}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{socket}\PYG{p}{(}\PYG{n}{AF\PYGZus{}INET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOCK\PYGZus{}STREAM}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{sock}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}socket error: \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{errno}\PYG{p}{));}\PYG{+w}{ }\PYG{n}{sleep}\PYG{p}{(}\PYG{l+m+mi}{2}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{        }\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr\PYGZus{}in}\PYG{+w}{ }\PYG{n}{sa}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{memset}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{sa}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{sa}\PYG{p}{));}
+\PYG{+w}{        }\PYG{n}{sa}\PYG{p}{.}\PYG{n}{sin\PYGZus{}family}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{AF\PYGZus{}INET}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{ip}\PYG{+w}{    }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}get\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ENTRY}\PYG{p}{(}\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{ip\PYGZus{}entry}\PYG{p}{));}
+\PYG{+w}{        }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{portc}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}get\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ENTRY}\PYG{p}{(}\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{port\PYGZus{}entry}\PYG{p}{));}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{port}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{portc}\PYG{+w}{ }\PYG{o}{?}\PYG{+w}{ }\PYG{n}{atoi}\PYG{p}{(}\PYG{n}{portc}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{n}{SERVER\PYGZus{}PORT}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{sa}\PYG{p}{.}\PYG{n}{sin\PYGZus{}port}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{htons}\PYG{p}{((}\PYG{k+kt}{uint16\PYGZus{}t}\PYG{p}{)}\PYG{n}{port}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{inet\PYGZus{}pton}\PYG{p}{(}\PYG{n}{AF\PYGZus{}INET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ip}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{sa}\PYG{p}{.}\PYG{n}{sin\PYGZus{}addr}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}invalid IP \PYGZsq{}\PYGZpc{}s\PYGZsq{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ip}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{sock}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{sleep}\PYG{p}{(}\PYG{l+m+mi}{2}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{connect}\PYG{p}{(}\PYG{n}{sock}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{sa}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{sa}\PYG{p}{))}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}connect failed: \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{errno}\PYG{p}{));}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{sock}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{sleep}\PYG{p}{(}\PYG{l+m+mi}{2}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}connected to \PYGZpc{}s:\PYGZpc{}d\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ip}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{port}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{sock}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+
+\PYG{+w}{        }\PYG{k+kt}{uint8\PYGZus{}t}\PYG{+w}{ }\PYG{n}{buf}\PYG{p}{[}\PYG{l+m+mi}{4096}\PYG{p}{];}\PYG{+w}{ }\PYG{k+kt}{size\PYGZus{}t}\PYG{+w}{ }\PYG{n}{buf\PYGZus{}len}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{net\PYGZus{}running}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{net\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{ssize\PYGZus{}t}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{recv}\PYG{p}{(}\PYG{n}{sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{buf}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{buf\PYGZus{}len}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{buf}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{buf\PYGZus{}len}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}recv error: \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{errno}\PYG{p}{));}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}server closed connection\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{n}{buf\PYGZus{}len}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{size\PYGZus{}t}\PYG{p}{)}\PYG{n}{n}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{buf\PYGZus{}len}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{net\PYGZus{}packet\PYGZus{}t}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{net\PYGZus{}packet\PYGZus{}t}\PYG{+w}{ }\PYG{n}{pkt}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{memcpy}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{pkt}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{buf}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{pkt}\PYG{p}{));}
+\PYG{+w}{                }\PYG{n}{memmove}\PYG{p}{(}\PYG{n}{buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{buf}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{pkt}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{buf\PYGZus{}len}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{pkt}\PYG{p}{));}
+\PYG{+w}{                }\PYG{n}{buf\PYGZus{}len}\PYG{+w}{ }\PYG{o}{\PYGZhy{}=}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{pkt}\PYG{p}{);}
+\PYG{+w}{                }\PYG{n}{buffer\PYGZus{}add\PYGZus{}sample}\PYG{p}{(}\PYG{n}{pkt}\PYG{p}{.}\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{pkt}\PYG{p}{.}\PYG{n}{svalue}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{pkt}\PYG{p}{.}\PYG{n}{ts}\PYG{p}{);}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{sock}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{app}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}disconnected, retrying in 2s...\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{sleep}\PYG{p}{(}\PYG{l+m+mi}{2}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}NET\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}network thread exiting\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ SEND COMMAND ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{send\PYGZus{}command}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{cmd}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{buf}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{buf}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{buf}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}s}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{send}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strlen}\PYG{p}{(}\PYG{n}{buf}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}CMD\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}send failed: \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{errno}\PYG{p}{));}
+\PYG{+w}{            }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strerror}\PYG{p}{(}\PYG{n}{errno}\PYG{p}{));}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}CMD\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}sent: \PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Not connected to server\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ GUI HELPERS ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{update\PYGZus{}status}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{text}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{status\PYGZus{}label}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{text}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} CHANGE 1/4: update\PYGZus{}button\PYGZus{}states — shutdown\PYGZus{}btn sensitive only when connected \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n}{streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{connect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{    }\PYG{o}{!}\PYG{n}{connected}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{disconnect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{  }\PYG{n}{connected}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{configure\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{   }\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{o}{!}\PYG{n}{streaming}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{start\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{       }\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{o}{!}\PYG{n}{streaming}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{pause\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{       }\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{  }\PYG{n}{streaming}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stop\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{        }\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{  }\PYG{n}{streaming}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{shutdown\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{    }\PYG{n}{connected}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{ip\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{       }\PYG{o}{!}\PYG{n}{connected}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{port\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{     }\PYG{o}{!}\PYG{n}{connected}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{,}\PYG{+w}{  }\PYG{o}{!}\PYG{n}{streaming}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ AUTO\PYGZhy{}POLLING TIMER ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}poll\PYGZus{}timer\PYGZus{}cb}\PYG{p}{(}\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{should\PYGZus{}close}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}start\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{polling\PYGZus{}timer\PYGZus{}start}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}source\PYGZus{}remove}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{g\PYGZus{}timeout\PYGZus{}add}\PYG{p}{(}
+\PYG{+w}{        }\PYG{p}{(}\PYG{n}{guint}\PYG{p}{)}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{on\PYGZus{}poll\PYGZus{}timer\PYGZus{}cb}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{[}\PYG{l+m+mi}{64}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Poll timer started at \PYGZpc{}d ms interval\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}POLL\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}s\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}source\PYGZus{}remove}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}msg}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}POLL\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Poll timer stopped\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}poll\PYGZus{}interval\PYGZus{}changed}\PYG{p}{(}\PYG{n}{GtkSpinButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{spin}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{new\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}get\PYGZus{}value\PYGZus{}as\PYGZus{}int}\PYG{p}{(}\PYG{n}{spin}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{new\PYGZus{}val}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{new\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{new\PYGZus{}val}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}start}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{[}\PYG{l+m+mi}{64}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Poll interval updated to \PYGZpc{}d ms\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{new\PYGZus{}val}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ COMMAND TERMINAL ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{process\PYGZus{}terminal\PYGZus{}command}\PYG{p}{(}\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{raw}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{[}\PYG{l+m+mi}{512}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{strncpy}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{raw}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cmd}\PYG{p}{[}\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}0\PYGZsq{}}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{p}\PYG{o}{++}\PYG{p}{)}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}n\PYGZsq{}}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}r\PYGZsq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{p}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}0\PYGZsq{}}\PYG{p}{;}\PYG{+w}{ }\PYG{k}{break}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{trimmed}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{*}\PYG{n}{trimmed}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{} \PYGZsq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{trimmed}\PYG{o}{++}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{*}\PYG{n}{trimmed}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+s+sc}{\PYGZsq{}\PYGZbs{}0\PYGZsq{}}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}\PYGZgt{} \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{trimmed}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}start\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Not connected\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}STREAMING\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}start}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Streaming started — polling server every T ms\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}pause\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Not streaming\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}pause\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}PAUSED\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}paused\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}stop\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Not streaming\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}stop\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connected \PYGZhy{} Ready\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}stopped\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strncmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}configure \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}configure sent\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strncmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}poll \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{ms}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{atoi}\PYG{p}{(}\PYG{n}{trimmed}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ms}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{ms}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ms}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{)}
+\PYG{+w}{            }\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}set\PYGZus{}value}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SPIN\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{),}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{gdouble}\PYG{p}{)}\PYG{n}{ms}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{polling\PYGZus{}timer\PYGZus{}start}\PYG{p}{();}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{[}\PYG{l+m+mi}{64}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Poll interval set to \PYGZpc{}d ms\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ms}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}disconnect\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}disconnect\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Disconnected\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}disconnected\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}shutdown\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Sending shutdown to server...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}shutdown\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server shutdown requested\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{trimmed}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}help\PYGZdq{}}\PYG{p}{))}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}\PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Available commands:\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}start                   \PYGZhy{} Begin polling server every T ms\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}pause                   \PYGZhy{} Pause polling\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}stop                    \PYGZhy{} Stop polling\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}poll \PYGZlt{}ms\PYGZgt{}               \PYGZhy{} Change poll interval (e.g. poll 10)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}configure T A0 A1 SW PB \PYGZhy{} Set server sampling rates (Hz)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}disconnect              \PYGZhy{} Disconnect from server\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}shutdown                \PYGZhy{} Shut down the server program\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}  \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}help                    \PYGZhy{} Show this help\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{msg}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Unknown command: \PYGZsq{}\PYGZpc{}s\PYGZsq{}  (type \PYGZsq{}help\PYGZsq{})\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{trimmed}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{msg}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}cmd\PYGZus{}entry\PYGZus{}activate}\PYG{p}{(}\PYG{n}{GtkEntry}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{entry}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{text}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}get\PYGZus{}text}\PYG{p}{(}\PYG{n}{entry}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{process\PYGZus{}terminal\PYGZus{}command}\PYG{p}{(}\PYG{n}{text}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{entry}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ DRAWING ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}draw\PYGZus{}chart}\PYG{p}{(}\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{widget}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{cairo\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{width}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}get\PYGZus{}allocated\PYGZus{}width}\PYG{p}{(}\PYG{n}{widget}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{height}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}get\PYGZus{}allocated\PYGZus{}height}\PYG{p}{(}\PYG{n}{widget}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{width}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{height}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.06}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.08}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.10}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}rectangle}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{width}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{height}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}fill}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{70}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}right}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{20}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{30}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}bottom}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{50}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{w}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{width}\PYG{+w}{  }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}right}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{height}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{  }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}bottom}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{w}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgba}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.16}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.25}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.37}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.2}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}line\PYGZus{}width}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{y}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{h}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{y}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}line\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{w}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{y}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}stroke}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.48}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.48}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.48}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}line\PYGZus{}width}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{1.5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}line\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{w}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}stroke}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}line\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}stroke}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{],}\PYG{+w}{ }\PYG{n}{y\PYGZus{}buf}\PYG{p}{[}\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{];}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{any\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}set}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{])}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{buffer\PYGZus{}get\PYGZus{}copy}\PYG{p}{(}\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{y\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{any\PYGZus{}data}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{n}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{v}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{y\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{global\PYGZus{}min\PYGZus{}set}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{                }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{                }\PYG{n}{global\PYGZus{}min\PYGZus{}set}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{k}{else}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{v}\PYG{+w}{        }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{p}{)}\PYG{+w}{  }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{v}\PYG{+w}{        }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{p}{)}\PYG{+w}{  }\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{v}\PYG{p}{;}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{];}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{any\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.7}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.7}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.7}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}select\PYGZus{}font\PYGZus{}face}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Sans\PYGZdq{}}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}SLANT\PYGZus{}NORMAL}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}WEIGHT\PYGZus{}NORMAL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}set\PYGZus{}font\PYGZus{}size}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{14}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{width}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mf}{0.5}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{80}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{height}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mf}{0.5}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Waiting for data...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{time\PYGZus{}window\PYGZus{}ms}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{double}\PYG{p}{)}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}range\PYGZus{}seconds}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mf}{1000.0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t\PYGZus{}max}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{t\PYGZus{}max}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{time\PYGZus{}window\PYGZus{}ms}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{global\PYGZus{}max\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{time\PYGZus{}window\PYGZus{}ms}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{t\PYGZus{}min}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}time}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{t\PYGZus{}range}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{t\PYGZus{}max}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{t\PYGZus{}range}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{t\PYGZus{}range}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{p}{)}
+\PYG{+w}{                     }\PYG{o}{?}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{:}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{y\PYGZus{}pad}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mf}{0.1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{y\PYGZus{}min}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}min\PYGZus{}val}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{y\PYGZus{}pad}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{y\PYGZus{}max}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{global\PYGZus{}max\PYGZus{}val}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{y\PYGZus{}pad}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{y\PYGZus{}max}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{y\PYGZus{}min}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{])}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{n}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{buffer\PYGZus{}get\PYGZus{}copy}\PYG{p}{(}\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{y\PYGZus{}buf}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SAMPLES}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{n}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{color\PYGZus{}r}\PYG{p}{,}
+\PYG{+w}{                                 }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{color\PYGZus{}g}\PYG{p}{,}
+\PYG{+w}{                                 }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{color\PYGZus{}b}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}set\PYGZus{}line\PYGZus{}width}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{2.0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{line\PYGZus{}started}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{n}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZgt{}}\PYG{+w}{ }\PYG{n}{t\PYGZus{}max}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{                }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{line\PYGZus{}started}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{cairo\PYGZus{}stroke}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{line\PYGZus{}started}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{                }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{            }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{xx}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{p}{((}\PYG{n}{x\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{t\PYGZus{}range}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{w}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{yy}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{p}{((}\PYG{n}{y\PYGZus{}buf}\PYG{p}{[}\PYG{n}{i}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{y\PYGZus{}min}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{n}{y\PYGZus{}range}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{h}\PYG{p}{;}
+\PYG{+w}{            }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{line\PYGZus{}started}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{xx}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{yy}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{line\PYGZus{}started}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{            }\PYG{k}{else}\PYG{+w}{                }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{cairo\PYGZus{}line\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{xx}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{yy}\PYG{p}{);}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{line\PYGZus{}started}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{cairo\PYGZus{}stroke}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}select\PYGZus{}font\PYGZus{}face}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Monospace\PYGZdq{}}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}SLANT\PYGZus{}NORMAL}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}WEIGHT\PYGZus{}NORMAL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}font\PYGZus{}size}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{9}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{label}\PYG{p}{[}\PYG{l+m+mi}{32}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{label}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{label}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}.1f\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{y\PYGZus{}max}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{i}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{y\PYGZus{}range}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{5.0}\PYG{p}{));}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{65}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{h}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{4}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{label}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{i}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{label}\PYG{p}{[}\PYG{l+m+mi}{32}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{label}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{label}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}.0f\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{i}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{t\PYGZus{}range}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mf}{5.0}\PYG{p}{));}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{w}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{i}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{20}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{25}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{label}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}source\PYGZus{}rgb}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{0.88}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}select\PYGZus{}font\PYGZus{}face}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Sans\PYGZdq{}}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}SLANT\PYGZus{}NORMAL}\PYG{p}{,}\PYG{n}{CAIRO\PYGZus{}FONT\PYGZus{}WEIGHT\PYGZus{}BOLD}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}font\PYGZus{}size}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{12}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{title}\PYG{p}{[}\PYG{l+m+mi}{128}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{title}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{title}\PYG{p}{),}
+\PYG{+w}{             }\PYG{l+s}{\PYGZdq{}Real\PYGZhy{}Time Sensor Data — \PYGZpc{}.1f to \PYGZpc{}.1f ms\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{t\PYGZus{}min}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{t\PYGZus{}max}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{title}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}set\PYGZus{}font\PYGZus{}size}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}left}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{w}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{l+m+mi}{60}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{l+m+mi}{45}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Time (milliseconds)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}move\PYGZus{}to}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{margin\PYGZus{}top}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{h}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{cairo\PYGZus{}show\PYGZus{}text}\PYG{p}{(}\PYG{n}{cr}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Value\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ STATS UPDATE ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{update\PYGZus{}stats\PYGZus{}box}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{GList}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{children}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}container\PYGZus{}get\PYGZus{}children}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{p}{));}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{GList}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{l}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{children}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{l}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{l}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{l}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{next}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}destroy}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{l}\PYG{o}{\PYGZhy{}\PYGZgt{}}\PYG{n}{data}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}list\PYGZus{}free}\PYG{p}{(}\PYG{n}{children}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{])}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{double}\PYG{+w}{ }\PYG{n}{mn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{mx}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{avg}\PYG{p}{;}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{count}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{buffer\PYGZus{}stats}\PYG{p}{(}\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{mn}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{mx}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{avg}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{count}\PYG{p}{))}\PYG{+w}{ }\PYG{k}{continue}\PYG{p}{;}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{line}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{line}\PYG{p}{),}
+\PYG{+w}{                 }\PYG{l+s}{\PYGZdq{}SID \PYGZpc{}d \PYGZpc{}\PYGZhy{}18s | Min: \PYGZpc{}8.1f  Max: \PYGZpc{}8.1f  Avg: \PYGZpc{}8.1f  (n=\PYGZpc{}4d)\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{sid}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{name}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{mn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{mx}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{avg}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{count}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{lab}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{markup}\PYG{p}{[}\PYG{l+m+mi}{320}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{markup}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{markup}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZlt{}tt\PYGZgt{}\PYGZpc{}s\PYGZlt{}/tt\PYGZgt{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{line}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}markup}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{lab}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{markup}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{lab}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{lab}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}show\PYGZus{}all}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ PERIODIC GUI UPDATE ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{n}{gboolean}\PYG{+w}{ }\PYG{n+nf}{ui\PYGZus{}update\PYGZus{}cb}\PYG{p}{(}\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{should\PYGZus{}close}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connected \PYGZhy{} Ready\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{else}\PYG{+w}{ }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connecting...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}stats\PYGZus{}box}\PYG{p}{();}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ BUTTON CALLBACKS ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}connect\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connecting...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Connecting...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}running}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}running}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}create}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}thread}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{network\PYGZus{}thread\PYGZus{}func}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}disconnect\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}disconnect\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Disconnected\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Disconnected from server\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}configure\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Stop streaming first!\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{rate\PYGZus{}spin}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{])}
+\PYG{+w}{            }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}
+\PYG{+w}{                }\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}get\PYGZus{}value\PYGZus{}as\PYGZus{}int}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SPIN\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{rate\PYGZus{}spin}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]));}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{\PYGZam{}\PYGZam{}}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{[}\PYG{l+m+mi}{256}\PYG{p}{];}
+\PYG{+w}{        }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}configure \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d \PYGZpc{}d\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}TEMP}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}ADC0}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}ADC1}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}SWITCH}\PYG{p}{],}
+\PYG{+w}{                 }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{SENSOR\PYGZus{}PUSHB}\PYG{p}{]);}
+\PYG{+w}{        }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{cmd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sensors configured\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}start\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Not connected!\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{||}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}TCP not yet connected to server\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}STREAMING\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}start}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Streaming started via button\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}pause\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Not streaming!\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}pause\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}PAUSED\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Paused via button\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}stop\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Not streaming!\PYGZdq{}}\PYG{p}{);}\PYG{+w}{ }\PYG{k}{return}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}stop\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connected \PYGZhy{} Ready\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Stopped via button\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} CHANGE 2/4: shutdown button callback \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{c+cm}{/*}
+\PYG{c+cm}{ * Sends \PYGZdq{}shutdown\PYGZdq{} to the server, then cleans up the client state.}
+\PYG{c+cm}{ * A confirmation dialog is shown first to prevent accidental presses.}
+\PYG{c+cm}{ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}shutdown\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{button}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}ERROR: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Not connected — cannot send shutdown\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} Confirmation dialog \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{dialog}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}message\PYGZus{}dialog\PYGZus{}new}\PYG{p}{(}
+\PYG{+w}{        }\PYG{n}{GTK\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{),}
+\PYG{+w}{        }\PYG{n}{GTK\PYGZus{}DIALOG\PYGZus{}MODAL}\PYG{+w}{ }\PYG{o}{|}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}DIALOG\PYGZus{}DESTROY\PYGZus{}WITH\PYGZus{}PARENT}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{GTK\PYGZus{}MESSAGE\PYGZus{}WARNING}\PYG{p}{,}
+\PYG{+w}{        }\PYG{n}{GTK\PYGZus{}BUTTONS\PYGZus{}YES\PYGZus{}NO}\PYG{p}{,}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}Send SHUTDOWN to the server?}\PYG{l+s+se}{\PYGZbs{}n\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}This will terminate the server process entirely.\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}window\PYGZus{}set\PYGZus{}title}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{dialog}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Confirm Server Shutdown\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{gint}\PYG{+w}{ }\PYG{n}{response}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}dialog\PYGZus{}run}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}DIALOG}\PYG{p}{(}\PYG{n}{dialog}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}destroy}\PYG{p}{(}\PYG{n}{dialog}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{response}\PYG{+w}{ }\PYG{o}{!=}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}RESPONSE\PYGZus{}YES}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Shutdown cancelled by user\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} Execute shutdown \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Sending shutdown command to server...\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{send\PYGZus{}command}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}shutdown\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}streaming}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}status}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server shutdown requested\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}OK: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Server shutdown sent. Connection closed.\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}time\PYGZus{}range\PYGZus{}changed}\PYG{p}{(}\PYG{n}{GtkRange}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{range}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{val}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{p}{)}\PYG{n}{gtk\PYGZus{}range\PYGZus{}get\PYGZus{}value}\PYG{p}{(}\PYG{n}{range}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}range\PYGZus{}seconds}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{val}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{tmp}\PYG{p}{[}\PYG{l+m+mi}{16}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{tmp}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{tmp}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}d sec\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{val}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{tmp}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}sensor\PYGZus{}toggled}\PYG{p}{(}\PYG{n}{GtkToggleButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{toggle}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{GPOINTER\PYGZus{}TO\PYGZus{}INT}\PYG{p}{(}\PYG{n}{user\PYGZus{}data}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}get\PYGZus{}active}\PYG{p}{(}\PYG{n}{toggle}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}window\PYGZus{}destroy}\PYG{p}{(}\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{w}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{user\PYGZus{}data}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{w}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{n}{user\PYGZus{}data}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{polling\PYGZus{}timer\PYGZus{}stop}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}running}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{is\PYGZus{}connected}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{should\PYGZus{}close}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}\PYG{+w}{ }\PYG{n}{close}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{p}{);}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}thread}\PYG{p}{)}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}detach}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{net\PYGZus{}thread}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}
+\PYG{+w}{        }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}destroy}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{buf}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{lock}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}main\PYGZus{}quit}\PYG{p}{();}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ UI SETUP ============ */}
+\PYG{k}{static}\PYG{+w}{ }\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{build\PYGZus{}ui}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{memset}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{g\PYGZus{}app}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sockfd}\PYG{+w}{             }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}range\PYGZus{}seconds}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}interval\PYGZus{}ms}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{DEFAULT\PYGZus{}POLL\PYGZus{}INTERVAL\PYGZus{}MS}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{polling\PYGZus{}timer\PYGZus{}id}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{buffer\PYGZus{}init}\PYG{p}{(}\PYG{n}{sid}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sampling\PYGZus{}rate}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{  }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{;}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}enabled}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}window\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WINDOW\PYGZus{}TOPLEVEL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}window\PYGZus{}set\PYGZus{}title}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{),}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}MNG Sensor Client \PYGZhy{} GTK3 Real\PYGZhy{}Time Visualization\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}window\PYGZus{}set\PYGZus{}default\PYGZus{}size}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{1400}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{980}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}destroy\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}window\PYGZus{}destroy}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{root\PYGZus{}vbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{root\PYGZus{}vbox}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{main\PYGZus{}hbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{main\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{root\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{main\PYGZus{}hbox}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* LEFT: chart + stats */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{left\PYGZus{}vbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{main\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{left\PYGZus{}vbox}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}drawing\PYGZus{}area\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{900}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{500}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}draw\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}draw\PYGZus{}chart}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{left\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{drawing\PYGZus{}area}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{stats\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Statistics\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{left\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{stats\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{stats\PYGZus{}scroll}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}new}\PYG{p}{(}\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}set\PYGZus{}policy}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SCROLLED\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{stats\PYGZus{}scroll}\PYG{p}{),}
+\PYG{+w}{                                   }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}AUTOMATIC}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}AUTOMATIC}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{stats\PYGZus{}scroll}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{stats\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{stats\PYGZus{}scroll}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{2}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{stats\PYGZus{}scroll}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stats\PYGZus{}box}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* RIGHT: scrollable control panel */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{right\PYGZus{}vbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{340}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{right\PYGZus{}scroll}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}new}\PYG{p}{(}\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}set\PYGZus{}policy}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SCROLLED\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{right\PYGZus{}scroll}\PYG{p}{),}
+\PYG{+w}{                                   }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}NEVER}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}AUTOMATIC}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{right\PYGZus{}scroll}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{right\PYGZus{}vbox}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{main\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{right\PYGZus{}scroll}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Connection Settings \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{conn\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Connection Settings\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{conn\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{conn\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{conn\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{conn\PYGZus{}box}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{ip\PYGZus{}lbl}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Server IP:\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ip\PYGZus{}lbl}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{ip\PYGZus{}lbl}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{ip\PYGZus{}entry}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ENTRY}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{ip\PYGZus{}entry}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}127.0.0.1\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{ip\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{port\PYGZus{}lbl}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Port:\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{port\PYGZus{}lbl}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{port\PYGZus{}lbl}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{port\PYGZus{}entry}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{n}{portbuf}\PYG{p}{[}\PYG{l+m+mi}{16}\PYG{p}{];}
+\PYG{+w}{    }\PYG{n}{snprintf}\PYG{p}{(}\PYG{n}{portbuf}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{portbuf}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}\PYGZpc{}d\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SERVER\PYGZus{}PORT}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ENTRY}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{port\PYGZus{}entry}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{portbuf}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{port\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{conn\PYGZus{}btn\PYGZus{}row}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{conn\PYGZus{}btn\PYGZus{}row}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{connect\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}CONNECT\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{connect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}connect\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}btn\PYGZus{}row}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{connect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{disconnect\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}DISCONNECT\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{disconnect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}disconnect\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{disconnect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}btn\PYGZus{}row}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{disconnect\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{status\PYGZus{}label}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Disconnected\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{status\PYGZus{}label}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}line\PYGZus{}wrap}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{status\PYGZus{}label}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{conn\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{status\PYGZus{}label}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Sampling Rates \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{rate\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Sampling Rates (Hz)\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{rate\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{rate\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{rate\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{rate\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{rate\PYGZus{}box}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{rh}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{rate\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{rh}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{lab}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{name}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{lab}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{130}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{lab}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{rh}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{lab}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{GtkAdjustment}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{adj}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}adjustment\PYGZus{}new}\PYG{p}{(}\PYG{l+m+mi}{100}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10000}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{100}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{spin}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}new}\PYG{p}{(}\PYG{n}{adj}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{spin}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{70}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{rh}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{spin}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{rate\PYGZus{}spin}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{spin}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{configure\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}CONFIGURE\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{configure\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}configure\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{configure\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{rate\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{configure\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Streaming Control \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{stream\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Streaming Control\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{stream\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{stream\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{stream\PYGZus{}box}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{start\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}START\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{start\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}start\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{start\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{start\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{pause\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}PAUSE\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{pause\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}pause\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{pause\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{pause\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stop\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}STOP\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stop\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}stop\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stop\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{stop\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} CHANGE 3/4: SHUTDOWN button — lives inside Streaming Control frame,}
+\PYG{c+cm}{     *      separated by a horizontal rule (GtkSeparator) to make it visually}
+\PYG{c+cm}{     *      distinct from START/PAUSE/STOP.                                    \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{sep}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}separator\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{sep}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{4}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{shutdown\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}SHUTDOWN SERVER\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{shutdown\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}\PYG{+w}{   }\PYG{c+cm}{/* disabled until connected */}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{shutdown\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}shutdown\PYGZus{}clicked}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{stream\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{shutdown\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} END CHANGE 3/4 \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Poll Interval \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Poll Interval\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{poll\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{poll\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{poll\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{poll\PYGZus{}box}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}row}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{poll\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{poll\PYGZus{}row}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}lbl}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Request every (ms):\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{poll\PYGZus{}lbl}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{poll\PYGZus{}row}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{poll\PYGZus{}lbl}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkAdjustment}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}adj}\PYG{+w}{ }\PYG{o}{=}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}adjustment\PYGZus{}new}\PYG{p}{(}\PYG{n}{DEFAULT\PYGZus{}POLL\PYGZus{}INTERVAL\PYGZus{}MS}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5000}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{10}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}spin\PYGZus{}button\PYGZus{}new}\PYG{p}{(}\PYG{n}{poll\PYGZus{}adj}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{80}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}value\PYGZhy{}changed\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}poll\PYGZus{}interval\PYGZus{}changed}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{poll\PYGZus{}row}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{poll\PYGZus{}spin}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{poll\PYGZus{}hint}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}How often the client requests}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}a new batch from the server.}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}1 ms = fastest, matches sensor}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}sampling rate for best fidelity.\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{poll\PYGZus{}hint}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}line\PYGZus{}wrap}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{poll\PYGZus{}hint}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{poll\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{poll\PYGZus{}hint}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Display Window \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{time\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Display Window\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{time\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{time\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{time\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{time\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{time\PYGZus{}box}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{tlrow}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{time\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{tlrow}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{tl}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Window (sec):\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{tl}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{0.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{tlrow}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{tl}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}5 sec\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}xalign}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mf}{1.0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}end}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{tlrow}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}label\PYGZus{}value}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkAdjustment}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{tadj}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}adjustment\PYGZus{}new}\PYG{p}{(}\PYG{l+m+mi}{5}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{60}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}scale}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}scale\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{tadj}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}scale\PYGZus{}set\PYGZus{}draw\PYGZus{}value}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SCALE}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}scale}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}scale\PYGZus{}set\PYGZus{}digits}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SCALE}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}scale}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}scale}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}value\PYGZhy{}changed\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}time\PYGZus{}range\PYGZus{}changed}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{time\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{time\PYGZus{}scale}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{} Visible Sensors \PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{sensor\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Visible Sensors\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{right\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{sensor\PYGZus{}box}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{5}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{sensor\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{8}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{sensor\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}box}\PYG{p}{);}
+\PYG{+w}{    }\PYG{k}{for}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}\PYG{+w}{ }\PYG{n}{sid}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}SENSORS}\PYG{p}{;}\PYG{+w}{ }\PYG{o}{++}\PYG{n}{sid}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{check}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}check\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{n}{g\PYGZus{}sensors}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{].}\PYG{n}{name}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}toggle\PYGZus{}button\PYGZus{}set\PYGZus{}active}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TOGGLE\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{check}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{check}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}toggled\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                         }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}sensor\PYGZus{}toggled}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{GINT\PYGZus{}TO\PYGZus{}POINTER}\PYG{p}{(}\PYG{n}{sid}\PYG{p}{));}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{sensor\PYGZus{}box}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{check}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{sensor\PYGZus{}check}\PYG{p}{[}\PYG{n}{sid}\PYG{p}{]}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{check}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} BOTTOM: COMMAND TERMINAL \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{term\PYGZus{}frame}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}frame\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Command Terminal\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{root\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{term\PYGZus{}frame}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{term\PYGZus{}vbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}VERTICAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{4}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}set\PYGZus{}border\PYGZus{}width}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{term\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{6}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{term\PYGZus{}frame}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{term\PYGZus{}vbox}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{log\PYGZus{}scroll}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}new}\PYG{p}{(}\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}scrolled\PYGZus{}window\PYGZus{}set\PYGZus{}policy}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}SCROLLED\PYGZus{}WINDOW}\PYG{p}{(}\PYG{n}{log\PYGZus{}scroll}\PYG{p}{),}
+\PYG{+w}{                                   }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}AUTOMATIC}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}POLICY\PYGZus{}AUTOMATIC}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}size\PYGZus{}request}\PYG{p}{(}\PYG{n}{log\PYGZus{}scroll}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{130}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{term\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{log\PYGZus{}scroll}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{+w}{   }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}buffer}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}get\PYGZus{}buffer}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{));}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}set\PYGZus{}editable}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}set\PYGZus{}cursor\PYGZus{}visible}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}text\PYGZus{}view\PYGZus{}set\PYGZus{}wrap\PYGZus{}mode}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}TEXT\PYGZus{}VIEW}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}WRAP\PYGZus{}WORD\PYGZus{}CHAR}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkCssProvider}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{css}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}css\PYGZus{}provider\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}css\PYGZus{}provider\PYGZus{}load\PYGZus{}from\PYGZus{}data}\PYG{p}{(}\PYG{n}{css}\PYG{p}{,}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}textview \PYGZob{} background\PYGZhy{}color: \PYGZsh{}0d1117; color: \PYGZsh{}c9d1d9;\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}           font\PYGZhy{}family: monospace; font\PYGZhy{}size: 11px; \PYGZcb{}\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}style\PYGZus{}context\PYGZus{}add\PYGZus{}provider}\PYG{p}{(}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}get\PYGZus{}style\PYGZus{}context}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{),}
+\PYG{+w}{        }\PYG{n}{GTK\PYGZus{}STYLE\PYGZus{}PROVIDER}\PYG{p}{(}\PYG{n}{css}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{GTK\PYGZus{}STYLE\PYGZus{}PROVIDER\PYGZus{}PRIORITY\PYGZus{}USER}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}object\PYGZus{}unref}\PYG{p}{(}\PYG{n}{css}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}container\PYGZus{}add}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}CONTAINER}\PYG{p}{(}\PYG{n}{log\PYGZus{}scroll}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}log\PYGZus{}view}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{input\PYGZus{}hbox}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}box\PYGZus{}new}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ORIENTATION\PYGZus{}HORIZONTAL}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{6}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{term\PYGZus{}vbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{input\PYGZus{}hbox}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{prompt}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}label\PYGZus{}new}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}cmd\PYGZgt{}\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{input\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{prompt}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}entry}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}new}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}entry\PYGZus{}set\PYGZus{}placeholder\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}ENTRY}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}entry}\PYG{p}{),}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{}start | stop | pause | poll \PYGZlt{}ms\PYGZgt{} | configure T A0 A1 SW PB\PYGZdq{}}
+\PYG{+w}{        }\PYG{l+s}{\PYGZdq{} | disconnect | shutdown | help\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}activate\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                     }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}cmd\PYGZus{}entry\PYGZus{}activate}\PYG{p}{),}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{input\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}entry}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{send\PYGZus{}btn}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{gtk\PYGZus{}button\PYGZus{}new\PYGZus{}with\PYGZus{}label}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Send\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}signal\PYGZus{}connect\PYGZus{}swapped}\PYG{p}{(}\PYG{n}{send\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}clicked\PYGZdq{}}\PYG{p}{,}
+\PYG{+w}{                             }\PYG{n}{G\PYGZus{}CALLBACK}\PYG{p}{(}\PYG{n}{on\PYGZus{}cmd\PYGZus{}entry\PYGZus{}activate}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{cmd\PYGZus{}entry}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}box\PYGZus{}pack\PYGZus{}start}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BOX}\PYG{p}{(}\PYG{n}{input\PYGZus{}hbox}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{send\PYGZus{}btn}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{c+cm}{/* \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} CHANGE 4/4: startup log messages updated to mention shutdown \PYGZhy{}\PYGZhy{}\PYGZhy{}\PYGZhy{} */}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Command terminal ready. Type \PYGZsq{}help\PYGZsq{} for commands.\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Poll interval default: 1 ms. Adjust with spin box or \PYGZsq{}poll \PYGZlt{}ms\PYGZgt{}\PYGZsq{}.\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{terminal\PYGZus{}log}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}INFO: \PYGZdq{}}\PYG{p}{,}\PYG{l+s}{\PYGZdq{}Use \PYGZsq{}shutdown\PYGZsq{} command or SHUTDOWN SERVER button to stop the server.\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{update\PYGZus{}button\PYGZus{}states}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}show\PYGZus{}all}\PYG{p}{(}\PYG{n}{g\PYGZus{}app}\PYG{p}{.}\PYG{n}{window}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+
+\PYG{c+cm}{/* ============ MAIN ============ */}
+\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{main}\PYG{p}{(}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{argc}\PYG{p}{,}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{argv}\PYG{p}{[])}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}init}\PYG{p}{(}\PYG{o}{\PYGZam{}}\PYG{n}{argc}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{argv}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{build\PYGZus{}ui}\PYG{p}{();}
+\PYG{+w}{    }\PYG{n}{g\PYGZus{}timeout\PYGZus{}add}\PYG{p}{(}\PYG{n}{UPDATE\PYGZus{}INTERVAL\PYGZus{}MS}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{ui\PYGZus{}update\PYGZus{}cb}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}main}\PYG{p}{();}
+\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{p}{\PYGZcb{}}
+
+
+\end{Verbatim}

@@ -1,0 +1,120 @@
+\section{Measurement Network Gateway}
+\textbf{Introduction}\\
+This project details the design and implementation of a robust Measurement Network Gateway deployed on a Xilinx Zynq-7000 SoC (ZedBoard). Designed to bridge the gap between physical instrumentation and remote digital monitoring for Industrial Internet of Things(IIoT) applications , the system acquires high-precision telemetry from a heterogeneous sensor array. This array includes a MAX31865 RTD-to-Digital converter for temperature, Analog-to-Digital Converters (ADC), and digital I/O peripherals. To ensure deterministic hardware sampling without network-induced latency, the software architecture employs a concurrent Producer-Consumer model utilizing POSIX threads (pthreads). A dedicated Sensor Thread manages precise, low-level hardware interactions and pushes timestamped data into a mutex-protected Ring Buffer. Asynchronously, a Server Thread consumes this data, managing TCP/IP network flow control and streaming the telemetry to remote client dashboards. The resulting system provides a scalable, fault-tolerant foundation for real-time remote monitoring, successfully offloading complex data processing to the client while maintaining strict embedded timing constraints.
+
+\begin{figure}[H]
+\centering 
+\includegraphics[width = 0.8\textwidth]{media/akshayintro1.png}
+\caption{Measurement Network Gateway Interconnection}
+\label{fig-akshay1}
+\end{figure}
+
+	
+\subsection{System Architecture \& Design}
+The system is engineered as a distributed network management gateway, designed to facilitate swift and reliable telemetry communication across remote nodes. Operating on a client-server paradigm, the core gateway application is deployed on a Linux operating system running atop the Xilinx Zynq-7000 SoC (ZedBoard), granting it direct interaction with physical hardware components. Conversely, the remote client features a graphical platform utilized to continuously monitor real-time data streams and dynamically configure the distant sensor devices over the TCP/IP network.
+
+\begin{figure}[H]
+\centering 
+\includegraphics[width = 0.8\textwidth]{media/akshayintro5.png}
+\caption{Server-client approach between devices}
+\label{fig-akshay2}
+\end{figure}
+	
+	
+Concurrent Producer-Consumer Model - To guarantee that data acquisition
+remains deterministic and immune to network latency, the internal system
+architecture is explicitly built upon a concurrent Producer-Consumer model.
+The core of the system is the Sensor Thread, which executes a precise timing
+loop to poll hardware peripherals through a custom Linux kernel driver
+(\texttt{/dev/meascdd}). By utilizing high-resolution sleep timers and direct
+register access, this thread ensures that temperature and analog signals are
+sampled at exact user-defined intervals without drift. To achieve this across
+multiple independent sensors, the thread employs an "Earliest Deadline First"
+scheduling algorithm. It continuously calculates the exact microsecond the
+next sensor sample is due and safely yields CPU cycles using \texttt{usleep()}
+until that specific deadline is reached.
+
+Decoupling and Shared Memory - To decouple the strict timing requirements of
+the hardware from the unpredictable nature of network communication, a
+thread-safe Ring Buffer is employed as an intermediate storage mechanism.
+Protected by Mutex (Mutual Exclusion) locks, this circular buffer allows the
+Sensor Thread to continuously push new data points without blocking, while the
+Server Thread (the Consumer) asynchronously retrieves them for transmission.
+Crucially, this memory sharing is further optimized using POSIX Condition
+Variables (\texttt{pthread\_cond\_t}). Instead of the Server Thread
+continuously polling the buffer and wasting CPU resources, it enters a deep
+zero-CPU sleep state when the buffer is empty. The exact microsecond the
+Sensor Thread commits a new reading to memory, it issues a signal that
+instantaneously wakes the Server Thread to batch and transmit the data.
+
+Network Communication and Stability - The Server Thread manages the network
+interface, listening on Port 50012 for incoming TCP connections. It handles a
+custom command protocol (e.g., \texttt{start}, \texttt{stop},
+\texttt{configure}), allowing remote users to dynamically adjust sampling
+rates or pause the stream. For instance, the \texttt{configure} command parses
+space-delimited string payloads to dynamically update the independent polling
+frequencies of the ADC, temperature, and switch components on the fly.
+
+This separation of concerns—isolating the hardware logic from the
+communication logic guarantees system stability. Even if the network
+connection drops or the client becomes unresponsive, the sensor data
+acquisition continues uninterrupted, preventing data loss or system hangs.
+Ultimately, this project demonstrates a scalable, industrial-grade solution
+for embedded data aggregation, showcasing the effective use of POSIX threads,
+event-driven synchronization primitives, and low-level driver interaction on
+an embedded Linux platform.
+
+The project is divided into hardware and software parts that fully integrate
+later to make project working. In Hardware components, Zynq-7000 ZedBoard,
+MAX31865 RTD-to-Digital converter, PmodAD1, RTD-Based Temperature measurement.
+On the other hand, Linux kernel is built to integrate hardware information into
+the software providing a platform to run the application. It uses ARM core
+processors of Xilinx's Zedboard to operate Linux OS. Further, a Remote screen
+or Graphical user interface is developed which communicates with the hardware
+using Transmission Control Protocol (TCP/IP).
+
+
+%\input{akshay_sensorthread}
+
+
+\section{Network Communication}
+\subsection{Transmission Control Protocol (TCP)}
+It is one of the most fundamental protocols of the internet. If the internet is a massive highway system, IP (Internet Protocol) is the GPS routing the trucks, and TCP is the logistics company ensuring every single package arrives intact, in the correct order, and confirming delivery with the sender.
+The Transmission Control Protocol (TCP) is a foundational communication protocol of the modern internet. While the Internet Protocol (IP) manages the addressing and routing of packets across disparate networks, TCP operates at the transport layer to ensure the reliable, ordered, and error-checked delivery of data streams between applications communicating over an IP network.
+
+\subsection{Core Characteristics of TCP}
+TCP was specifically engineered to mitigate the inherent unreliability of physical network infrastructure, where latency, packet loss, and hardware limitations are commonplace. By operating transparently over this variable underlying layer, TCP provides applications with a robust and dependable communication channel.
+\begin{itemize}
+\item \textbf{Connection-Oriented:} Prior to any data transmission, TCP establishes a formal session between endpoints using a protocol known as the three-way handshake. This synchronizes sequence numbers and operational parameters between the client and server.
+\item \textbf{Reliable Delivery:} TCP employs a strict system of acknowledgments and timeouts. If a transmitted segment is not acknowledged by the receiver within a specified timeframe, TCP assumes the packet was lost and automatically retransmits the data, guaranteeing complete delivery.
+\item \textbf{In-Order Delivery:} Because individual IP packets may traverse different network paths and arrive out of sequence, TCP affixes a sequence number to each segment. This allows the receiving network stack to reassemble the payload in the precise order it was originally transmitted.
+\item \textbf{Error Checking:} Each TCP segment includes a cryptographic checksum in its header. The receiver independently calculates the checksum of the incoming data and compares it to this field to detect bit-level corruption that may have occurred during transit.
+\item \textbf{Flow Control:} To prevent a high-bandwidth sender from overwhelming a receiver with limited processing capacity or memory, TCP utilizes a sliding window mechanism. The receiver continuously advertises its available buffer space, dictating the maximum volume of unacknowledged data the sender is permitted to transmit at any given moment.
+\item \textbf{Congestion Control:} TCP implements advanced algorithms to detect network-wide congestion (typically inferred from dropped packets or delayed acknowledgments). Upon detecting network saturation, the protocol dynamically throttles its transmission rate to alleviate strain on intermediary routers and prevent systemic network collapse.
+\end{itemize}
+
+
+
+\clearpage
+\subsection{TCP Server-Client Connection}
+\begin{figure}[H]
+\centering 
+\includegraphics[width = 0.9\textwidth]{media/akshayintro8.png}
+\caption{TCP Client-Server setup connection}
+\label{fig-akshyintro3}
+\end{figure}
+	
+The Transmission Control Protocol (TCP) provides the foundation for reliable network communication. In the context of your embedded gateway system, this protocol governs the stable, continuous streaming of sensor data from the server to the client dashboard. The TCP connection lifecycle is structured around three primary phases:
+	
+
+\textbf{1. Connection Establishment :} Prior to any data transmission, the client and server must synchronize their connection states. The client initiates this process by transmitting a SYN (Synchronize) packet containing an initial sequence number. The server allocates the necessary resources and responds with a SYN-ACK packet, which the client then formally acknowledges (ACK). This establishes a secure, bidirectional communication channel.
+
+\textbf{2. Data Transfer and Flow Control :} To prevent high-speed data streams from overwhelming the receiving system's memory, TCP employs a dynamic "Sliding Window" protocol.
+
+\begin{itemize}
+\item Buffer Management: The receiving server allocates a finite memory buffer for incoming data. With every acknowledgment (ACK) it sends back to the client, it also advertises its current available buffer capacity using the Window Size (WIN) parameter.
+\item State Tracking: The sender categorizes data into strict states (acknowledged, in-transit, permitted to send, and blocked) and restricts its transmission output to fit within the receiver's advertised window.
+\item The "Zero Window" State: If the receiver's buffer reaches maximum capacity, it broadcasts a WIN=0. To prevent data loss, the sender immediately halts transmission. Once the receiving application processes the buffered data, the receiver issues a Window Update with a non-zero value, allowing transmission to resume.
+\end{itemize}
+
+\textbf{3. Connection Termination:} Upon completing the data transfer, the session is gracefully dismantled to ensure no in-transit data is corrupted or lost. Both the client and server perform a reciprocal exchange of FIN (Finish) and ACK packets. Once both sides have confirmed termination, the connection is formally closed, and the operating system releases the associated ports and memory resources.

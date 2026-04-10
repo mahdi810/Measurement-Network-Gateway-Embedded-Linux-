@@ -1,0 +1,49 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}disconnect\PYGZus{}clicked}\PYG{p}{(}\PYG{n}{GtkButton}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{button}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Not connected!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{        }\PYG{k}{return}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Disconnecting...\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{thread\PYGZus{}running}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{transmitting}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{k}{const}\PYG{+w}{ }\PYG{k+kt}{char}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{disconnect\PYGZus{}cmd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}disconnect}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{;}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{send}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{disconnect\PYGZus{}cmd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{strlen}\PYG{p}{(}\PYG{n}{disconnect\PYGZus{}cmd}\PYG{p}{),}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{log\PYGZus{}error}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Failed to send disconnect command\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{usleep}\PYG{p}{(}\PYG{l+m+mi}{100000}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{close}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{p}{);}
+\PYG{+w}{        }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{socket\PYGZus{}fd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{\PYGZhy{}1}\PYG{p}{;}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+
+\PYG{+w}{    }\PYG{n}{pthread\PYGZus{}join}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{receive\PYGZus{}thread}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{connected}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}label\PYGZus{}set\PYGZus{}text}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}LABEL}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{label\PYGZus{}status}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Disconnected!\PYGZdq{}}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{entry\PYGZus{}ip}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}connect}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{TRUE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}disconnect}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}start}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}stop}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}configure}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{btn\PYGZus{}temp\PYGZus{}set}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{btn\PYGZus{}adc0\PYGZus{}set}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{btn\PYGZus{}adc1\PYGZus{}set}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}WIDGET}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{btn\PYGZus{}switch\PYGZus{}set}\PYG{p}{),}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{btn\PYGZus{}req\PYGZus{}data\PYGZus{}time\PYGZus{}set}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}widget\PYGZus{}set\PYGZus{}sensitive}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{spin\PYGZus{}req\PYGZus{}data\PYGZus{}time}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{FALSE}\PYG{p}{);}
+
+
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}button\PYGZus{}set\PYGZus{}label}\PYG{p}{(}\PYG{n}{GTK\PYGZus{}BUTTON}\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{button\PYGZus{}start}\PYG{p}{),}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}Start\PYGZdq{}}\PYG{p}{);}
+
+\PYG{+w}{    }\PYG{n}{log\PYGZus{}debug}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Disconnected successfully\PYGZdq{}}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}

@@ -1,0 +1,9 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kt}{void}\PYG{+w}{ }\PYG{n+nf}{on\PYGZus{}window\PYGZus{}destroy}\PYG{p}{(}\PYG{n}{GtkWidget}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{widget}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{gpointer}\PYG{+w}{ }\PYG{n}{data}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{    }\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{ctx}\PYG{p}{.}\PYG{n}{connected}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
+\PYG{+w}{        }\PYG{n}{on\PYGZus{}disconnect\PYGZus{}clicked}\PYG{p}{(}\PYG{n+nb}{NULL}\PYG{p}{,}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{);}
+\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
+\PYG{+w}{    }\PYG{n}{gtk\PYGZus{}main\PYGZus{}quit}\PYG{p}{();}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}
