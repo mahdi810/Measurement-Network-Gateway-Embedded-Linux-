@@ -1,8 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{cmd\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}SHUTDOWN\PYGZdq{}}\PYG{p}{))}
-\PYG{p}{\PYGZob{}}
-\PYG{+w}{  }\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Shutting down...}\PYG{l+s+se}{\PYGZbs{}n}\PYG{l+s}{\PYGZdq{}}\PYG{p}{);}
-\PYG{+w}{  }\PYG{n}{system\PYGZus{}running}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
-\PYG{+w}{  }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{STREAM\PYGZus{}DISCONNECT}\PYG{p}{;}
-\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

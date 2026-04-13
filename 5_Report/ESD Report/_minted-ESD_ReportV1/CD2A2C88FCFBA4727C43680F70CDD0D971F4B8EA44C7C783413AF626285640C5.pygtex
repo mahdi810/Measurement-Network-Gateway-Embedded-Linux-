@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{server\PYGZus{}t0}\PYG{+w}{ }\PYG{o}{==}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}
-\PYG{+w}{    }\PYG{n}{server\PYGZus{}t0}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{;}
-
-\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{rel\PYGZus{}ts}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ts}\PYG{+w}{ }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{server\PYGZus{}t0}\PYG{p}{;}
-\end{Verbatim}

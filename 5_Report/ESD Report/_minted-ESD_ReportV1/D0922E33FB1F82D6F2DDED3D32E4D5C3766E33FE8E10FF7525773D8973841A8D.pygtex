@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{begin}
-
-\PYG{+w}{    }\PYG{n}{rcvData\PYGZus{}0}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{rd\PYGZus{}buf\PYGZus{}0}\PYG{p}{;}
-\PYG{+w}{    }\PYG{n}{rcvData\PYGZus{}1}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{n}{rd\PYGZus{}buf\PYGZus{}1}\PYG{p}{;}
-\end{Verbatim}

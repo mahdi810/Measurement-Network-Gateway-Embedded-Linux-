@@ -1,4 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rnum}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{REGNUM\PYGZus{}ID}\PYG{p}{;}\PYG{+w}{     }\PYG{c+c1}{// Register selector = 0x0FF}
-\PYG{+w}{    }\PYG{n}{tf\PYGZus{}obj\PYGZus{}snd}\PYG{p}{.}\PYG{n}{rvalue}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{7}\PYG{p}{;}
-\end{Verbatim}

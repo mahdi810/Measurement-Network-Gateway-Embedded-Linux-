@@ -1,4 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-1 = Button is PRESSED (user is currently holding it down)
-0 = Button is RELEASED (button is in its rest position)
-\end{Verbatim}

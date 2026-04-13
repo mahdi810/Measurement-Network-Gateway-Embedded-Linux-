@@ -1,3 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{extern}\PYG{+w}{ }\PYG{n}{ring\PYGZus{}buffer\PYGZus{}t}\PYG{+w}{ }\PYG{o}{*}\PYG{n}{rb}\PYG{p}{;}
-\end{Verbatim}

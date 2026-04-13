@@ -1,4 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{k}{when}\PYG{+w}{ }\PYG{l+m+mb}{b\PYGZdq{}010\PYGZdq{}}\PYG{+w}{ }\PYG{o}{=\PYGZgt{}}
-\PYG{+w}{	    }\PYG{n}{reg\PYGZus{}data\PYGZus{}out}\PYG{+w}{ }\PYG{o}{\PYGZlt{}=}\PYG{+w}{ }\PYG{l+m+mh}{x\PYGZdq{}0000\PYGZdq{}}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{+w}{ }\PYG{n}{MAX\PYGZus{}Data}\PYG{p}{;}
-\end{Verbatim}

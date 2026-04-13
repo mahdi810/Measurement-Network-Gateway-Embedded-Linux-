@@ -1,7 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{server\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{socket}\PYG{p}{(}\PYG{n}{AF\PYGZus{}INET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOCK\PYGZus{}STREAM}\PYG{p}{,}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{);}
-\PYG{+w}{	}\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{		}\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}socket\PYGZdq{}}\PYG{p}{);}
-\PYG{+w}{		}\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
-\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

@@ -1,5 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{opt}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{;}
-\PYG{+w}{	}\PYG{n}{setsockopt}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SOL\PYGZus{}SOCKET}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{SO\PYGZus{}REUSEADDR}\PYG{p}{,}
-\PYG{+w}{	}\PYG{o}{\PYGZam{}}\PYG{n}{opt}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{opt}\PYG{p}{));}
-\end{Verbatim}

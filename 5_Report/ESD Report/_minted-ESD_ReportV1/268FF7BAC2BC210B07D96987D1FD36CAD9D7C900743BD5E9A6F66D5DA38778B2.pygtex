@@ -1,4 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-pixel\PYGZus{}x = margin\PYGZus{}left + ((time\PYGZus{}ms \PYGZhy{} t\PYGZus{}min) / t\PYGZus{}range) * plot\PYGZus{}width
-pixel\PYGZus{}y = margin\PYGZus{}top + plot\PYGZus{}height \PYGZhy{} ((value \PYGZhy{} y\PYGZus{}min) / y\PYGZus{}range) * plot\PYGZus{}height
-\end{Verbatim}

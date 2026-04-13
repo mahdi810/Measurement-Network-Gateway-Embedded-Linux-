@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{o}{!}\PYG{n}{strcmp}\PYG{p}{(}\PYG{n}{cmd\PYGZus{}buffer}\PYG{p}{,}\PYG{+w}{ }\PYG{l+s}{\PYGZdq{}START\PYGZdq{}}\PYG{p}{))}
-\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{    }\PYG{n}{stream\PYGZus{}state}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{STREAM\PYGZus{}RUNNING}\PYG{p}{;}
-\PYG{+w}{ }\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

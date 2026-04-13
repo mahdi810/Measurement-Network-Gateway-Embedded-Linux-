@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{c+c1}{// Example: Read a status register}
-\PYG{+w}{	}\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{fd}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{open}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}/dev/meascdd\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{O\PYGZus{}RDWR}\PYG{p}{);}
-\PYG{+w}{	}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{+w}{ }\PYG{n}{reg\PYGZus{}value}\PYG{p}{;}
-\PYG{+w}{	}\PYG{n}{read}\PYG{p}{(}\PYG{n}{fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{reg\PYGZus{}value}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{k+kt}{uint32\PYGZus{}t}\PYG{p}{));}
-\end{Verbatim}

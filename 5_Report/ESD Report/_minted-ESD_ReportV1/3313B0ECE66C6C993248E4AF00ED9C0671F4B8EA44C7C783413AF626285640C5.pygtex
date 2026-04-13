@@ -1,8 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{		}\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{sid}\PYG{p}{;}\PYG{+w}{      }\PYG{c+c1}{// Sensor ID (1=Temp, 2=ADC0, 3=ADC1,}
-\PYG{+w}{						   }\PYG{c+c1}{// 4=Switch, 5=Push\PYGZhy{}button)}
-\PYG{+w}{		}\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{svalue}\PYG{p}{;}\PYG{+w}{   }\PYG{c+c1}{// Sensor value (raw reading)}
-\PYG{+w}{		}\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{;}\PYG{+w}{       }\PYG{c+c1}{// Timestamp in microseconds since startup}
-\PYG{+w}{	}\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{packet}\PYG{p}{;}
-\end{Verbatim}

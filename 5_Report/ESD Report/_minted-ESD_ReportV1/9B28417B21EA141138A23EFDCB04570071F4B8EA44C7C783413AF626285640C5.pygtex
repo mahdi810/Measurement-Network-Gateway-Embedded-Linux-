@@ -1,5 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{n}{recv\PYGZus{}all}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{net\PYGZus{}size}\PYG{p}{,}\PYG{+w}{ }\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{net\PYGZus{}size}\PYG{p}{));}
-\PYG{n}{payload\PYGZus{}size}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{ntohl}\PYG{p}{(}\PYG{n}{net\PYGZus{}size}\PYG{p}{);}
-\PYG{n}{recv\PYGZus{}all}\PYG{p}{(}\PYG{n}{sock\PYGZus{}fd}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{batch}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{payload\PYGZus{}size}\PYG{p}{);}
-\end{Verbatim}

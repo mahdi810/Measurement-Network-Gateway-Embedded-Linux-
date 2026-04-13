@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{static}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}t}\PYG{+w}{ }\PYG{n}{net\PYGZus{}thread}\PYG{p}{;}
-\PYG{k}{static}\PYG{+w}{ }\PYG{k}{volatile}\PYG{+w}{ }\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n}{net\PYGZus{}running}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{;}
-
-\PYG{k}{static}\PYG{+w}{ }\PYG{n}{pthread\PYGZus{}mutex\PYGZus{}t}\PYG{+w}{ }\PYG{n}{sample\PYGZus{}lock}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PTHREAD\PYGZus{}MUTEX\PYGZus{}INITIALIZER}\PYG{p}{;}
-\end{Verbatim}

@@ -1,8 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{	}\PYG{k}{if}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{bind}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{,}\PYG{+w}{ }\PYG{p}{(}\PYG{k}{struct}\PYG{+w}{ }\PYG{n+nc}{sockaddr}\PYG{+w}{ }\PYG{o}{*}\PYG{p}{)}\PYG{o}{\PYGZam{}}\PYG{n}{server\PYGZus{}address}\PYG{p}{,}
-\PYG{+w}{	}\PYG{k}{sizeof}\PYG{p}{(}\PYG{n}{server\PYGZus{}address}\PYG{p}{))}\PYG{+w}{ }\PYG{o}{\PYGZlt{}}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{		}\PYG{n}{perror}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}bind\PYGZdq{}}\PYG{p}{);}
-\PYG{+w}{		}\PYG{n}{close}\PYG{p}{(}\PYG{n}{server\PYGZus{}sock}\PYG{p}{);}
-\PYG{+w}{		}\PYG{k}{return}\PYG{+w}{ }\PYG{n+nb}{NULL}\PYG{p}{;}
-\PYG{+w}{	}\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

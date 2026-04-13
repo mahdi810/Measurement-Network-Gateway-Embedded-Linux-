@@ -1,4 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{while}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{now}\PYG{+w}{ }\PYG{o}{\PYGZgt{}=}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{next\PYGZus{}deadline}\PYG{p}{)}
-\PYG{+w}{    }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{next\PYGZus{}deadline}\PYG{+w}{ }\PYG{o}{+=}\PYG{+w}{ }\PYG{n}{sensor\PYGZus{}cfg}\PYG{p}{[}\PYG{n}{i}\PYG{p}{].}\PYG{n}{period\PYGZus{}us}\PYG{p}{;}
-\end{Verbatim}

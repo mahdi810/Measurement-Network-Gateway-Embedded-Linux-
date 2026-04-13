@@ -1,8 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n+nf}{getElapsedTime}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
-\PYG{p}{\PYGZob{}}
-\PYG{+w}{    }\PYG{n}{clock\PYGZus{}gettime}\PYG{p}{(}\PYG{n}{CLOCK\PYGZus{}MONOTONIC}\PYG{p}{,}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{current\PYGZus{}time}\PYG{p}{);}
-\PYG{+w}{    }\PYG{k}{return}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{current\PYGZus{}time}\PYG{p}{.}\PYG{n}{tv\PYGZus{}sec}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{l+m+mi}{1000000}\PYG{+w}{ }\PYG{o}{+}\PYG{+w}{ }\PYG{n}{current\PYGZus{}time}\PYG{p}{.}\PYG{n}{tv\PYGZus{}nsec}\PYG{+w}{ }\PYG{o}{/}\PYG{+w}{ }\PYG{l+m+mi}{1000}\PYG{p}{)}
-\PYG{+w}{           }\PYG{o}{\PYGZhy{}}\PYG{+w}{ }\PYG{n}{us\PYGZus{}startup\PYGZus{}time}\PYG{p}{;}
-\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

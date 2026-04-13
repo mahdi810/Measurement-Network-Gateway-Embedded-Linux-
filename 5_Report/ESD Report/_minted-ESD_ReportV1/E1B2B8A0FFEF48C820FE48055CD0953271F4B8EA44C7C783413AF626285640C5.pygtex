@@ -1,3 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{n}{g\PYGZus{}idle\PYGZus{}add}\PYG{p}{((}\PYG{n}{GSourceFunc}\PYG{p}{)}\PYG{n}{gtk\PYGZus{}widget\PYGZus{}queue\PYGZus{}draw}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{graph\PYGZus{}area}\PYG{p}{);}
-\end{Verbatim}

@@ -1,7 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{k}{typedef}\PYG{+w}{ }\PYG{k}{struct}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{sid}\PYG{p}{;}\PYG{+w}{      }\PYG{c+c1}{// Sensor ID: 4 bytes}
-\PYG{+w}{    }\PYG{k+kt}{int}\PYG{+w}{      }\PYG{n}{svalue}\PYG{p}{;}\PYG{+w}{   }\PYG{c+c1}{// Sensor value: 4 bytes}
-\PYG{+w}{    }\PYG{k+kt}{uint64\PYGZus{}t}\PYG{+w}{ }\PYG{n}{ts}\PYG{p}{;}\PYG{+w}{       }\PYG{c+c1}{// Timestamp: 8 bytes}
-\PYG{p}{\PYGZcb{}}\PYG{+w}{ }\PYG{n}{packet}\PYG{p}{;}\PYG{+w}{              }\PYG{c+c1}{// Total: 16 bytes per packet}
-\end{Verbatim}
